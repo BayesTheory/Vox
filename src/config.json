@@ -1,0 +1,40 @@
+{
+  "datasets": {
+    "detection": {
+      "name": "UA-DETRAC-CAR", 
+      "path": "C:/Users/riana/OneDrive/Desktop/Vox MVP/data/PROCESSED/UA_DETRAC_CAR",
+      "yaml": "detrac_car.yaml",
+      "task": "detect"
+    },
+    "classification": {
+      "name": "COLOR-FINAL-YOLO",
+      "path": "C:/Users/riana/OneDrive/Desktop/Vox MVP/data/PROCESSED/COLOR_FINAL_YOLO", 
+      "yaml": "data.yaml",
+      "task": "classify"
+    }
+  },
+  "models": {
+    "yolo11n": {
+      "model": "yolo11n.pt",
+      "size": "nano",
+      "tasks": ["detect", "classify"]
+    },
+    "yolo11s": {
+      "model": "yolo11s.pt", 
+      "size": "small",
+      "tasks": ["detect", "classify"]
+    }
+  },
+  "training": {
+    "epochs": 50,
+    "imgsz": 640,
+    "batch": 16,
+    "device": "cpu",
+    "patience": 10,
+    "save_period": 5
+  },
+  "mlflow": {
+    "tracking_uri": "./mlruns",
+    "experiment_name": "YOLO_Training"
+  }
+}
