@@ -1,0 +1,13 @@
+#pastas e arquivos
+.venv
+.vscode
+vscode/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+Teste visao computacional.docx
+data/UA-DETRAC/
+data/VeRi/
+data/VCor/
