@@ -1,0 +1,1 @@
+desc=A: backbone congelado, epochs=12, freeze=10, imgsz=640, lr0=0.01, mosaic=0.5

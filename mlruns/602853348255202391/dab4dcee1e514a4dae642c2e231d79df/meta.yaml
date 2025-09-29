@@ -1,0 +1,15 @@
+artifact_uri: /home/users/rianagario/Testes/Voxada/src/mlruns/602853348255202391/dab4dcee1e514a4dae642c2e231d79df/artifacts
+end_time: 1759102581249
+entry_point_name: ''
+experiment_id: '602853348255202391'
+lifecycle_stage: active
+run_id: dab4dcee1e514a4dae642c2e231d79df
+run_name: yolo11n_detection_detect_detect3_n
+run_uuid: dab4dcee1e514a4dae642c2e231d79df
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1759102581032
+status: 4
+tags: []
+user_id: rianagario

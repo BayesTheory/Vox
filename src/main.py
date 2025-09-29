@@ -1,105 +1,47 @@
 #!/usr/bin/env python3
-"""
-Sistema de Treinamento YOLO
-- Detecção de veículos (UA-DETRAC)
-- Classificação de cores (VeRi + VCoR)
-"""
-
-import argparse
+import argparse, json, sys
 from pathlib import Path
-from src.train import train_model, train_all_available
-from src.utils import load_config, validate_dataset_path
 
-def check_datasets():
-    """Verifica status dos datasets processados"""
-    config = load_config()
-    
-    print("🔍 Verificando datasets processados...")
-    print("=" * 50)
-    
-    all_ready = True
-    
-    for key, dataset_config in config["datasets"].items():
-        path = dataset_config["path"]
-        yaml_file = dataset_config["yaml"]
-        task = dataset_config["task"]
-        
-        is_valid, message = validate_dataset_path(path, yaml_file)
-        
-        status = "✅ PRONTO" if is_valid else "❌ FALTANDO"
-        print(f"{key.upper()} ({task}): {status}")
-        print(f"  Caminho: {path}")
-        print(f"  YAML: {yaml_file}")
-        
-        if not is_valid:
-            print(f"  Erro: {message}")
-            all_ready = False
-        
-        print()
-    
-    if all_ready:
-        print("🎯 Todos os datasets estão prontos para treinamento!")
-    else:
-        print("⚠️ Execute os scripts de pré-processamento primeiro")
-    
-    return all_ready
+# adiciona a raiz do projeto ao sys.path quando rodado como script
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
+# importe diretamente do arquivo para evitar depender do __init__.py
+from src.train.train import train_from_config  # ← muda aqui
+
+def resolve_config_path(passed: str | None) -> Path:
+    if passed:
+        return Path(passed).resolve()
+    local = Path(__file__).resolve().with_name("config.json")
+    if local.exists():
+        return local
+    root_cfg = ROOT / "config.json"
+    if root_cfg.exists():
+        return root_cfg
+    raise FileNotFoundError("config.json não encontrado; passe --config explicitamente.")
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Sistema de Treinamento YOLO para Detecção + Classificação"
-    )
-    
-    parser.add_argument(
-        "--check", action="store_true",
-        help="Verificar status dos datasets"
-    )
-    
-    parser.add_argument(
-        "--train", choices=["detection", "classification", "all"],
-        help="Treinar modelo específico ou todos"
-    )
-    
-    parser.add_argument(
-        "--model", default="yolo11n",
-        help="Modelo a usar (yolo11n, yolo11s, etc.)"
-    )
-    
-    args = parser.parse_args()
-    
-    if args.check:
-        check_datasets()
-        return
-    
-    if args.train:
-        if args.train == "all":
-            print("🚀 Iniciando treinamento de todos os modelos disponíveis...")
-            results = train_all_available()
-            
-            print("\n📊 Resumo dos treinamentos:")
-            for name, result in results.items():
-                status = "✅" if result else "❌"
-                print(f"  {status} {name}")
-        
-        elif args.train == "detection":
-            print(f"🚗 Treinando detecção com {args.model}...")
-            train_model("detection", args.model)
-        
-        elif args.train == "classification":
-            print(f"🎨 Treinando classificação com {args.model}...")
-            train_model("classification", args.model)
-    
-    else:
-        # Modo interativo básico
-        print("🎯 Sistema de Treinamento YOLO")
-        print("=" * 40)
-        
-        if check_datasets():
-            print("\n🚀 Datasets prontos! Use:")
-            print("  python main.py --train all")
-            print("  python main.py --train detection --model yolo11n")
-            print("  python main.py --train classification --model yolo11n")
-        else:
-            print("\n⚠️ Execute primeiro os pré-processamentos necessários")
+    ap = argparse.ArgumentParser(description="Treinamento YOLO (detecção e/ou classificação) com stages e MLflow")
+    ap.add_argument("--config", help="Caminho para o config.json (padrão: src/config.json)")
+    ap.add_argument("--family", choices=["yolov8","yolo11"])
+    ap.add_argument("--variant", choices=["n","s"])
+    ap.add_argument("--task", choices=["detect","classify"])
+    ap.add_argument("--dataset_key", choices=["detection","classification"])
+    args = ap.parse_args()
+
+    cfg_path = resolve_config_path(args.config)
+
+    # Overrides via CLI (opcional)
+    if any([args.family, args.variant, args.task, args.dataset_key]):
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        if args.family: cfg["model_family"] = args.family
+        if args.variant: cfg["variant"] = args.variant
+        if args.task:    cfg["task"] = args.task
+        if args.dataset_key: cfg["dataset_key"] = args.dataset_key
+        cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    train_from_config(str(cfg_path))
 
 if __name__ == "__main__":
     main()
