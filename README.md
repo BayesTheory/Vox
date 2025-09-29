@@ -1,4 +1,4 @@
-Sistema de Detecção e Classificação de Cor de Veículos
+Vox 🌐 - Sistema de Detecção e Classificação de Cor de Veículos
 
 ## RESULTADOS ALCANÇADOS
 - **Detecção**: YOLO11n (85.2% mAP@50) | YOLO11s (89.7% mAP@50)
@@ -155,3 +155,4 @@ CMD ["python", "-m", "src.main", "api", "--host", "0.0.0.0"]
 ---
 Desenvolvido para aplicações de Smart Cities e monitoramento urbano.
 Performance: 89.7% detecção + 91.2% classificação + 12-15 FPS CPU.
+
