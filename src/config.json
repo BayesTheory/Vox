@@ -1,47 +1,96 @@
 {
-  "dataset_key": "detection",
-  "model_family": "yolo11",
-  "variant": "n",
-  "task": "detect",
-
-  "datasets": {
-    "detection": {
-      "path": "C:/Users/riana/OneDrive/Desktop/Vox MVP/data/PROCESSED/UA_DETRAC_CAR",
-      "yaml": "detrac_car.yaml",
-      "task": "detect"
-    },
-    "classification": {
-      "path": "C:/Users/riana/OneDrive/Desktop/Vox MVP/data/PROCESSED/COLOR_FINAL_YOLO",
-      "yaml": "data.yaml",
-      "task": "classify"
-    }
-  },
-
-  "training": {
-    "epochs": 50,
-    "imgsz": 640,
-    "batch": 16,
-    "device": "cpu",
-    "patience": 10,
-    "save_period": 5,
-    "seed": 42
-  },
-
-  "stages": {
-    "detect": [
-      { "desc": "A: backbone congelado", "epochs": 12, "freeze": 10, "imgsz": 640, "mosaic": 0.5, "lr0": 0.01 },
-      { "desc": "B: descongelar parcial", "epochs": 18, "freeze": 5,  "imgsz": 640, "mosaic": 0.2, "lr0": 0.005 },
-      { "desc": "C: full unfreeze",       "epochs": 20, "freeze": 0,  "imgsz": 640, "mosaic": 0.0, "lr0": 0.002, "lrf": 0.1, "cosine": true }
-    ],
-    "classify": [
-      { "desc": "A: cabeça apenas",       "epochs": 10, "freeze": 10, "imgsz": 224, "hsv_h": 0.0, "hsv_s": 0.2, "hsv_v": 0.2, "fliplr": 0.5, "degrees": 10, "translate": 0.05, "scale": 0.15 },
-      { "desc": "B: refino blocos finais", "epochs": 20, "freeze": 5,  "imgsz": 224, "hsv_h": 0.0, "hsv_s": 0.25, "hsv_v": 0.25, "lr0": 0.01, "lrf": 0.2, "fliplr": 0.5, "degrees": 10, "translate": 0.05, "scale": 0.15 },
-      { "desc": "C: full unfreeze",       "epochs": 20, "freeze": 0,  "imgsz": 224, "hsv_h": 0.0, "hsv_s": 0.2,  "hsv_v": 0.2,  "lr0": 0.005, "lrf": 0.1, "fliplr": 0.5, "degrees": 10, "translate": 0.05, "scale": 0.15 }
-    ]
-  },
-
   "mlflow": {
     "tracking_uri": "./mlruns",
     "experiment_name": "YOLO_Training"
+  },
+  "project_name": "VehicleColorDetection",
+  "model_family": "yolo11",
+  "variants": ["n", "s"],
+  "tasks": ["detect", "classify"],
+  "datasets": {
+    "detection": {
+      "name": "detrac_car",
+      "path": "data/1",
+      "yaml": "detrac_car.yaml",
+      "classes": ["car"],
+      "nc": 1
+    },
+    "classification": {
+      "name": "COLOR_FINAL_YOLO",
+      "path": "data/2/COLOR_FINAL_YOLO",
+      "yaml": "data.yaml",
+      "classes": ["amarelo", "azul", "branco", "cinza_prata", "dourado", "laranja", "marrom", "preto", "verde", "vermelho"],
+      "nc": 10,
+      "balance": {
+        "enabled": true,
+        "mode": "oversample",
+        "ratio": 0.6
+      }
+    }
+  },
+  "training": {
+    "seed": 42,
+    "device": "0",
+    "workers": 16,
+    "amp": true,
+    "save_period": 5,
+    "patience": 10
+  },
+  "stages": {
+    "detect": {
+      "part1": {
+        "enabled": false,
+        "desc": "Parte 1: transfer learning básico",
+        "epochs": 50,
+        "batch": 16,
+        "imgsz": 640,
+        "freeze": 0,
+        "lr0": 0.01,
+        "lrf": 0.1,
+        "mosaic": 1.0,
+        "augment": true
+      },
+      "part2": {
+        "enabled": true,
+        "desc": "Parte 2: fine-tuning especializado",
+        "epochs": 18,
+        "batch": 384,
+        "imgsz": 640,
+        "freeze": 5,
+        "lr0": 0.005,
+        "lrf": 0.01,
+        "mosaic": 0.2,
+        "cos_lr": false
+      }
+    },
+    "classify": {
+      "enabled": true,
+      "desc": "Classificação de cores com augmentation",
+      "epochs": 20,
+      "batch": 256,
+      "imgsz": 224,
+      "freeze": null,
+      "lr0": 0.005,
+      "lrf": 0.1,
+      "fliplr": 0.5,
+      "degrees": 10.0,
+      "translate": 0.05,
+      "scale": 0.15,
+      "auto_augment": "randaugment",
+      "erasing": 0.4,
+      "cos_lr": true
+    }
+  },
+  "tracking": {
+    "tracker": "botsort.yaml",
+    "det_imgsz": 640,
+    "cls_imgsz": 224,
+    "conf_thres": 0.25,
+    "iou_thres": 0.7
+  },
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "reload": false
   }
 }
