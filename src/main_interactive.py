@@ -2,7 +2,8 @@
 from pathlib import Path
 import argparse
 
-from src.main import cmd_train_detect, cmd_train_classify, cmd_track, cmd_api  # reusa funções do main atual
+# src/main_interactive.py
+from src.cli.commands import cmd_train_detect, cmd_train_classify, cmd_track, cmd_api
 
 def prompt_choice(title, options):
     print(f"\n{title}")
@@ -71,6 +72,7 @@ def main():
         cos_lr = prompt_text("cos_lr (y/n)", "y").lower().startswith("y")
         balance = prompt_text("Balancear (oversample none)", "oversample")
         ratio = float(prompt_text("Balance ratio", "0.6"))
+
         # Encaminha para o main de classificação (sua função train_entry/atual)
         from src.main_classify import train_entry
         class A: pass
@@ -98,7 +100,7 @@ def main():
 
     else:
         # API
-        host = prompt_text("Host", "0.0.0.0")
+        host = prompt_text("Host","127.0.0.1")
         port = int(prompt_text("Porta", "8000"))
         reload = prompt_text("Reload (y/n)", "n").lower().startswith("y")
         class A: pass

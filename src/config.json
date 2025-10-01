@@ -82,11 +82,26 @@
     }
   },
   "tracking": {
-    "tracker": "botsort.yaml",
-    "det_imgsz": 640,
+    "tracker": "bytetrack.yaml",
+
+    "color_classifier_mode": "hsv",
+
+    "prefer_onnx": true,
+    "onnx_simplify": true,
+    "onnx_dynamic_cls": true,
+    "onnx_verbose": false,
+
+    "det_imgsz_cpu": 320,
+    "det_imgsz_gpu": 416,
     "cls_imgsz": 224,
-    "conf_thres": 0.25,
-    "iou_thres": 0.7
+
+    "conf_thres": 0.35,
+    "iou_thres": 0.7,
+
+    "sample_every": 7,
+    "min_cls_conf": 0.7,
+    "refresh_every": 60,
+    "area_change_pct": 0.30
   },
   "api": {
     "host": "0.0.0.0",
