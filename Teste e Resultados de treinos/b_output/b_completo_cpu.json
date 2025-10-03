@@ -1,0 +1,111 @@
+{
+  "video_info": {
+    "filename": "b.mp4",
+    "resolution": "1364x768",
+    "fps_in": 25.0,
+    "fps_out": 25.0,
+    "total_frames_in": 1549,
+    "total_frames_out": 1548,
+    "frame_stride": 2,
+    "detection_interval": 2,
+    "timeline_mode": "duplicate"
+  },
+  "hardware_info": {
+    "device": "cpu",
+    "backend_detection": "ONNX-CPU",
+    "backend_classification": "ONNX-CPU"
+  },
+  "processing_parameters": {
+    "tracker": "bytetrack.yaml",
+    "detection": {
+      "imgsz": 320,
+      "conf_threshold": 0.45,
+      "iou_threshold": 0.6,
+      "max_det": 25
+    },
+    "classification": {
+      "min_confidence": 0.35,
+      "imgsz": 128,
+      "batch_size": 10
+    },
+    "performance": {
+      "frame_stride": 2,
+      "detection_interval": 2,
+      "num_threads_cpu": 12
+    }
+  },
+  "performance_metrics": {
+    "total_frames_processed": 774,
+    "total_time_seconds": 53.28,
+    "total_time_formatted": "53s",
+    "average_fps": 14.53,
+    "avg_detection_time": 0.0013,
+    "avg_classification_time": 0.0151,
+    "avg_interpolation_time": 0.0018,
+    "fps_model": 14.53,
+    "fps_raw_equiv": 29.06,
+    "processed_frames_total": 774,
+    "interpolated_frames": 387,
+    "detection_efficiency": "50.0% enhanced frames",
+    "timeline_mode": "duplicate"
+  },
+  "tracks": [
+    {
+      "video_id": "b",
+      "track_id": 72,
+      "frame_inicial": 662,
+      "frame_final": 836,
+      "cor": "preto",
+      "confianca_media": 0.9999
+    },
+    {
+      "video_id": "b",
+      "track_id": 74,
+      "frame_inicial": 808,
+      "frame_final": 908,
+      "cor": "verde",
+      "confianca_media": 0.7247
+    },
+    {
+      "video_id": "b",
+      "track_id": 146,
+      "frame_inicial": 1370,
+      "frame_final": 1518,
+      "cor": "marrom",
+      "confianca_media": 0.5703
+    },
+    {
+      "video_id": "b",
+      "track_id": 160,
+      "frame_inicial": 1458,
+      "frame_final": 1540,
+      "cor": "branco",
+      "confianca_media": 0.6858
+    },
+    {
+      "video_id": "b",
+      "track_id": 168,
+      "frame_inicial": 1530,
+      "frame_final": 1534,
+      "cor": "branco",
+      "confianca_media": 0.8846
+    },
+    {
+      "video_id": "b",
+      "track_id": 170,
+      "frame_inicial": 1542,
+      "frame_final": 1546,
+      "cor": "branco",
+      "confianca_media": 0.5884
+    }
+  ],
+  "summary": {
+    "total_tracks": 6,
+    "color_distribution": {
+      "preto": 1,
+      "verde": 1,
+      "marrom": 1,
+      "branco": 3
+    }
+  }
+}
