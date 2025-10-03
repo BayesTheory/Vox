@@ -1,0 +1,666 @@
+[
+  {
+    "video_id": "b",
+    "track_id": 1,
+    "frame_inicial": 0,
+    "frame_final": 204,
+    "cor": "azul",
+    "confianca_media": 0.8993
+  },
+  {
+    "video_id": "b",
+    "track_id": 2,
+    "frame_inicial": 0,
+    "frame_final": 21,
+    "cor": "preto",
+    "confianca_media": 0.8828
+  },
+  {
+    "video_id": "b",
+    "track_id": 3,
+    "frame_inicial": 0,
+    "frame_final": 176,
+    "cor": "preto",
+    "confianca_media": 0.838
+  },
+  {
+    "video_id": "b",
+    "track_id": 4,
+    "frame_inicial": 0,
+    "frame_final": 39,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9795
+  },
+  {
+    "video_id": "b",
+    "track_id": 5,
+    "frame_inicial": 0,
+    "frame_final": 5,
+    "cor": "cinza_prata",
+    "confianca_media": 0.686
+  },
+  {
+    "video_id": "b",
+    "track_id": 7,
+    "frame_inicial": 9,
+    "frame_final": 235,
+    "cor": "preto",
+    "confianca_media": 0.8735
+  },
+  {
+    "video_id": "b",
+    "track_id": 8,
+    "frame_inicial": 54,
+    "frame_final": 261,
+    "cor": "azul",
+    "confianca_media": 0.9015
+  },
+  {
+    "video_id": "b",
+    "track_id": 9,
+    "frame_inicial": 68,
+    "frame_final": 286,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8835
+  },
+  {
+    "video_id": "b",
+    "track_id": 11,
+    "frame_inicial": 98,
+    "frame_final": 402,
+    "cor": "preto",
+    "confianca_media": 0.8638
+  },
+  {
+    "video_id": "b",
+    "track_id": 12,
+    "frame_inicial": 128,
+    "frame_final": 395,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8029
+  },
+  {
+    "video_id": "b",
+    "track_id": 13,
+    "frame_inicial": 170,
+    "frame_final": 423,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9085
+  },
+  {
+    "video_id": "b",
+    "track_id": 15,
+    "frame_inicial": 176,
+    "frame_final": 417,
+    "cor": "preto",
+    "confianca_media": 0.8075
+  },
+  {
+    "video_id": "b",
+    "track_id": 16,
+    "frame_inicial": 186,
+    "frame_final": 448,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8225
+  },
+  {
+    "video_id": "b",
+    "track_id": 18,
+    "frame_inicial": 197,
+    "frame_final": 294,
+    "cor": "cinza_prata",
+    "confianca_media": 0.6753
+  },
+  {
+    "video_id": "b",
+    "track_id": 21,
+    "frame_inicial": 206,
+    "frame_final": 271,
+    "cor": "dourado",
+    "confianca_media": 0.9114
+  },
+  {
+    "video_id": "b",
+    "track_id": 22,
+    "frame_inicial": 216,
+    "frame_final": 455,
+    "cor": "cinza_prata",
+    "confianca_media": 0.7631
+  },
+  {
+    "video_id": "b",
+    "track_id": 23,
+    "frame_inicial": 222,
+    "frame_final": 474,
+    "cor": "vermelho",
+    "confianca_media": 0.99
+  },
+  {
+    "video_id": "b",
+    "track_id": 24,
+    "frame_inicial": 245,
+    "frame_final": 481,
+    "cor": "branco",
+    "confianca_media": 0.9606
+  },
+  {
+    "video_id": "b",
+    "track_id": 25,
+    "frame_inicial": 279,
+    "frame_final": 508,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8735
+  },
+  {
+    "video_id": "b",
+    "track_id": 26,
+    "frame_inicial": 294,
+    "frame_final": 424,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8085
+  },
+  {
+    "video_id": "b",
+    "track_id": 29,
+    "frame_inicial": 323,
+    "frame_final": 541,
+    "cor": "preto",
+    "confianca_media": 0.9118
+  },
+  {
+    "video_id": "b",
+    "track_id": 33,
+    "frame_inicial": 359,
+    "frame_final": 605,
+    "cor": "azul",
+    "confianca_media": 0.9782
+  },
+  {
+    "video_id": "b",
+    "track_id": 34,
+    "frame_inicial": 364,
+    "frame_final": 600,
+    "cor": "dourado",
+    "confianca_media": 0.7363
+  },
+  {
+    "video_id": "b",
+    "track_id": 36,
+    "frame_inicial": 373,
+    "frame_final": 515,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8451
+  },
+  {
+    "video_id": "b",
+    "track_id": 37,
+    "frame_inicial": 379,
+    "frame_final": 621,
+    "cor": "cinza_prata",
+    "confianca_media": 0.7968
+  },
+  {
+    "video_id": "b",
+    "track_id": 38,
+    "frame_inicial": 392,
+    "frame_final": 476,
+    "cor": "preto",
+    "confianca_media": 0.9839
+  },
+  {
+    "video_id": "b",
+    "track_id": 45,
+    "frame_inicial": 410,
+    "frame_final": 633,
+    "cor": "dourado",
+    "confianca_media": 0.7332
+  },
+  {
+    "video_id": "b",
+    "track_id": 48,
+    "frame_inicial": 417,
+    "frame_final": 494,
+    "cor": "marrom",
+    "confianca_media": 0.8433
+  },
+  {
+    "video_id": "b",
+    "track_id": 49,
+    "frame_inicial": 417,
+    "frame_final": 465,
+    "cor": "cinza_prata",
+    "confianca_media": 0.7222
+  },
+  {
+    "video_id": "b",
+    "track_id": 50,
+    "frame_inicial": 434,
+    "frame_final": 695,
+    "cor": "preto",
+    "confianca_media": 0.8881
+  },
+  {
+    "video_id": "b",
+    "track_id": 51,
+    "frame_inicial": 449,
+    "frame_final": 725,
+    "cor": "vermelho",
+    "confianca_media": 0.9691
+  },
+  {
+    "video_id": "b",
+    "track_id": 55,
+    "frame_inicial": 488,
+    "frame_final": 655,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8389
+  },
+  {
+    "video_id": "b",
+    "track_id": 57,
+    "frame_inicial": 507,
+    "frame_final": 574,
+    "cor": "vermelho",
+    "confianca_media": 0.9985
+  },
+  {
+    "video_id": "b",
+    "track_id": 58,
+    "frame_inicial": 551,
+    "frame_final": 787,
+    "cor": "azul",
+    "confianca_media": 0.8936
+  },
+  {
+    "video_id": "b",
+    "track_id": 60,
+    "frame_inicial": 560,
+    "frame_final": 712,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9797
+  },
+  {
+    "video_id": "b",
+    "track_id": 63,
+    "frame_inicial": 590,
+    "frame_final": 795,
+    "cor": "branco",
+    "confianca_media": 0.8151
+  },
+  {
+    "video_id": "b",
+    "track_id": 64,
+    "frame_inicial": 592,
+    "frame_final": 838,
+    "cor": "preto",
+    "confianca_media": 0.9351
+  },
+  {
+    "video_id": "b",
+    "track_id": 67,
+    "frame_inicial": 612,
+    "frame_final": 741,
+    "cor": "preto",
+    "confianca_media": 0.8822
+  },
+  {
+    "video_id": "b",
+    "track_id": 68,
+    "frame_inicial": 620,
+    "frame_final": 853,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9198
+  },
+  {
+    "video_id": "b",
+    "track_id": 69,
+    "frame_inicial": 645,
+    "frame_final": 892,
+    "cor": "azul",
+    "confianca_media": 0.8011
+  },
+  {
+    "video_id": "b",
+    "track_id": 71,
+    "frame_inicial": 701,
+    "frame_final": 749,
+    "cor": "cinza_prata",
+    "confianca_media": 0.668
+  },
+  {
+    "video_id": "b",
+    "track_id": 74,
+    "frame_inicial": 773,
+    "frame_final": 1016,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9165
+  },
+  {
+    "video_id": "b",
+    "track_id": 76,
+    "frame_inicial": 796,
+    "frame_final": 1040,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9425
+  },
+  {
+    "video_id": "b",
+    "track_id": 78,
+    "frame_inicial": 804,
+    "frame_final": 1075,
+    "cor": "preto",
+    "confianca_media": 0.9261
+  },
+  {
+    "video_id": "b",
+    "track_id": 79,
+    "frame_inicial": 806,
+    "frame_final": 996,
+    "cor": "preto",
+    "confianca_media": 0.7915
+  },
+  {
+    "video_id": "b",
+    "track_id": 80,
+    "frame_inicial": 838,
+    "frame_final": 1101,
+    "cor": "amarelo",
+    "confianca_media": 0.9637
+  },
+  {
+    "video_id": "b",
+    "track_id": 81,
+    "frame_inicial": 875,
+    "frame_final": 1113,
+    "cor": "preto",
+    "confianca_media": 0.834
+  },
+  {
+    "video_id": "b",
+    "track_id": 83,
+    "frame_inicial": 881,
+    "frame_final": 1115,
+    "cor": "cinza_prata",
+    "confianca_media": 0.839
+  },
+  {
+    "video_id": "b",
+    "track_id": 86,
+    "frame_inicial": 911,
+    "frame_final": 1143,
+    "cor": "azul",
+    "confianca_media": 0.9902
+  },
+  {
+    "video_id": "b",
+    "track_id": 87,
+    "frame_inicial": 928,
+    "frame_final": 1146,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9367
+  },
+  {
+    "video_id": "b",
+    "track_id": 88,
+    "frame_inicial": 939,
+    "frame_final": 1166,
+    "cor": "cinza_prata",
+    "confianca_media": 0.702
+  },
+  {
+    "video_id": "b",
+    "track_id": 90,
+    "frame_inicial": 976,
+    "frame_final": 1224,
+    "cor": "preto",
+    "confianca_media": 0.8231
+  },
+  {
+    "video_id": "b",
+    "track_id": 92,
+    "frame_inicial": 990,
+    "frame_final": 1234,
+    "cor": "vermelho",
+    "confianca_media": 0.9016
+  },
+  {
+    "video_id": "b",
+    "track_id": 99,
+    "frame_inicial": 1013,
+    "frame_final": 1101,
+    "cor": "cinza_prata",
+    "confianca_media": 0.924
+  },
+  {
+    "video_id": "b",
+    "track_id": 101,
+    "frame_inicial": 1070,
+    "frame_final": 1332,
+    "cor": "cinza_prata",
+    "confianca_media": 0.7178
+  },
+  {
+    "video_id": "b",
+    "track_id": 103,
+    "frame_inicial": 1084,
+    "frame_final": 1093,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8237
+  },
+  {
+    "video_id": "b",
+    "track_id": 105,
+    "frame_inicial": 1093,
+    "frame_final": 1176,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8866
+  },
+  {
+    "video_id": "b",
+    "track_id": 106,
+    "frame_inicial": 1096,
+    "frame_final": 1103,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9858
+  },
+  {
+    "video_id": "b",
+    "track_id": 109,
+    "frame_inicial": 1104,
+    "frame_final": 1393,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9215
+  },
+  {
+    "video_id": "b",
+    "track_id": 110,
+    "frame_inicial": 1114,
+    "frame_final": 1353,
+    "cor": "cinza_prata",
+    "confianca_media": 0.6805
+  },
+  {
+    "video_id": "b",
+    "track_id": 111,
+    "frame_inicial": 1127,
+    "frame_final": 1130,
+    "cor": "branco",
+    "confianca_media": 0.731
+  },
+  {
+    "video_id": "b",
+    "track_id": 114,
+    "frame_inicial": 1141,
+    "frame_final": 1281,
+    "cor": "branco",
+    "confianca_media": 0.9875
+  },
+  {
+    "video_id": "b",
+    "track_id": 116,
+    "frame_inicial": 1148,
+    "frame_final": 1174,
+    "cor": "preto",
+    "confianca_media": 0.873
+  },
+  {
+    "video_id": "b",
+    "track_id": 118,
+    "frame_inicial": 1168,
+    "frame_final": 1172,
+    "cor": "cinza_prata",
+    "confianca_media": 0.979
+  },
+  {
+    "video_id": "b",
+    "track_id": 119,
+    "frame_inicial": 1175,
+    "frame_final": 1178,
+    "cor": "amarelo",
+    "confianca_media": 0.6318
+  },
+  {
+    "video_id": "b",
+    "track_id": 121,
+    "frame_inicial": 1185,
+    "frame_final": 1386,
+    "cor": "cinza_prata",
+    "confianca_media": 0.7728
+  },
+  {
+    "video_id": "b",
+    "track_id": 124,
+    "frame_inicial": 1209,
+    "frame_final": 1471,
+    "cor": "cinza_prata",
+    "confianca_media": 0.7357
+  },
+  {
+    "video_id": "b",
+    "track_id": 127,
+    "frame_inicial": 1219,
+    "frame_final": 1314,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9106
+  },
+  {
+    "video_id": "b",
+    "track_id": 128,
+    "frame_inicial": 1224,
+    "frame_final": 1304,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8682
+  },
+  {
+    "video_id": "b",
+    "track_id": 129,
+    "frame_inicial": 1244,
+    "frame_final": 1487,
+    "cor": "cinza_prata",
+    "confianca_media": 0.7897
+  },
+  {
+    "video_id": "b",
+    "track_id": 134,
+    "frame_inicial": 1271,
+    "frame_final": 1511,
+    "cor": "vermelho",
+    "confianca_media": 0.9287
+  },
+  {
+    "video_id": "b",
+    "track_id": 135,
+    "frame_inicial": 1272,
+    "frame_final": 1303,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8984
+  },
+  {
+    "video_id": "b",
+    "track_id": 136,
+    "frame_inicial": 1274,
+    "frame_final": 1516,
+    "cor": "preto",
+    "confianca_media": 0.7937
+  },
+  {
+    "video_id": "b",
+    "track_id": 138,
+    "frame_inicial": 1299,
+    "frame_final": 1534,
+    "cor": "cinza_prata",
+    "confianca_media": 0.7699
+  },
+  {
+    "video_id": "b",
+    "track_id": 140,
+    "frame_inicial": 1331,
+    "frame_final": 1516,
+    "cor": "azul",
+    "confianca_media": 0.8376
+  },
+  {
+    "video_id": "b",
+    "track_id": 142,
+    "frame_inicial": 1342,
+    "frame_final": 1548,
+    "cor": "preto",
+    "confianca_media": 0.8077
+  },
+  {
+    "video_id": "b",
+    "track_id": 144,
+    "frame_inicial": 1369,
+    "frame_final": 1544,
+    "cor": "cinza_prata",
+    "confianca_media": 0.8304
+  },
+  {
+    "video_id": "b",
+    "track_id": 145,
+    "frame_inicial": 1386,
+    "frame_final": 1548,
+    "cor": "preto",
+    "confianca_media": 0.7262
+  },
+  {
+    "video_id": "b",
+    "track_id": 146,
+    "frame_inicial": 1396,
+    "frame_final": 1548,
+    "cor": "preto",
+    "confianca_media": 0.8385
+  },
+  {
+    "video_id": "b",
+    "track_id": 156,
+    "frame_inicial": 1445,
+    "frame_final": 1530,
+    "cor": "preto",
+    "confianca_media": 0.8519
+  },
+  {
+    "video_id": "b",
+    "track_id": 161,
+    "frame_inicial": 1460,
+    "frame_final": 1548,
+    "cor": "cinza_prata",
+    "confianca_media": 0.9031
+  },
+  {
+    "video_id": "b",
+    "track_id": 162,
+    "frame_inicial": 1464,
+    "frame_final": 1465,
+    "cor": "preto",
+    "confianca_media": 0.8389
+  },
+  {
+    "video_id": "b",
+    "track_id": 164,
+    "frame_inicial": 1503,
+    "frame_final": 1545,
+    "cor": "amarelo",
+    "confianca_media": 0.6123
+  }
+]
