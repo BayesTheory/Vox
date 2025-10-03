@@ -63,9 +63,6 @@ Vox/
 ```bash
 git clone <repository>
 cd Vox
-
-# Configurar permissões
-chmod +x scripts/deploy.sh
 ```
 
 ### **2. Ative o ambiente Conda e Instale o Poetry**
