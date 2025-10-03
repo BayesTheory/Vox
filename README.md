@@ -201,13 +201,11 @@ python main_uni.py track \
 ## 📈 **Roadmap**
 
 ### **v2.1 (Próxima Release)**
+- [ ] Suporte a Treino/Retreino fechando o ciclo CI/CD
 - [ ] Suporte a streaming em tempo real
 - [ ] Dashboard de analytics avançado
 - [ ] Exportação para banco de dados
 - [ ] API de estatísticas históricas
-
-### **v3.0 (Futuro)**
-- [ ] **Pipeli
 
 ## 🔧 **Desenvolvimento**
 
