@@ -1,123 +1,36 @@
-# VehicleColorAI - Requirements
-
 # ==============================================================================
-# CORE ML/DL FRAMEWORKS
+# CORE ML & COMPUTER VISION
+# Dependências essenciais para o modelo e processamento de imagem.
 # ==============================================================================
 torch>=2.0.0
 torchvision>=0.15.0
 ultralytics>=8.3.0
-
-# ==============================================================================
-# COMPUTER VISION & IMAGE PROCESSING
-# ==============================================================================
-opencv-python-headless>=4.8.0
+numpy>=1.24.0
+opencv-python-headless>=4.8.0  # Versão sem dependências de GUI, ideal para servidores
 pillow>=10.0.0
-imageio>=2.31.0
-scikit-image>=0.21.0
-albumentations>=1.3.0
 
 # ==============================================================================
 # MULTI-OBJECT TRACKING
+# Bibliotecas para o rastreamento de veículos, se usado em produção.
 # ==============================================================================
 filterpy>=1.4.5
 lap>=0.4.0
 
 # ==============================================================================
-# DATA SCIENCE & ANALYTICS
-# ==============================================================================
-numpy>=1.24.0
-pandas>=2.0.0
-scikit-learn>=1.3.0
-scipy>=1.11.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-
-# ==============================================================================
-# MLOPS & EXPERIMENT TRACKING
-# ==============================================================================
-mlflow>=2.7.0
-
-# ==============================================================================
-# API & WEB FRAMEWORK
+# API & WEB SERVER
+# Framework da API e servidor web para produção.
 # ==============================================================================
 fastapi>=0.104.0
-uvicorn[standard]>=0.23.0
-python-multipart>=0.0.6  # For file uploads
+gunicorn>=21.2.0              # Servidor WSGI/ASGI para produção
+uvicorn[standard]>=0.24.0      # Servidor ASGI que o Gunicorn vai gerenciar
+python-multipart>=0.0.6       # Necessário para upload de arquivos em formulários
+orjson>=3.9.0                 # Parser JSON mais rápido para o FastAPI
 
 # ==============================================================================
-# DATA PROCESSING & UTILITIES
+# UTILITIES & LOGGING
+# Utilitários para configuração, logging e processamento.
 # ==============================================================================
-tqdm>=4.65.0
 pyyaml>=6.0
-requests>=2.31.0
-
-# ==============================================================================
-# VIDEO PROCESSING
-# ==============================================================================
-ffmpeg-python>=0.2.0
-
-# ==============================================================================
-# DEVELOPMENT & TESTING
-# ==============================================================================
-pytest>=7.4.0
-pytest-asyncio>=0.21.0  # For FastAPI async tests
-
-# ==============================================================================
-# ADDITIONAL UTILITIES
-# ==============================================================================
-# CLI improvements
-click>=8.1.0
-prompt-toolkit>=3.0.39  # For interactive menu
-
-# Configuration & environment
 python-dotenv>=1.0.0
-
-# Logging
-loguru>=0.7.0
-
-# Progress bars & UI
-rich>=13.5.0
-
-# JSON handling
-orjson>=3.9.0  # Faster JSON for API responses
-
-# Memory profiling (development)
-memory-profiler>=0.61.0
-
-# Code quality (development)
-black>=23.0.0
-isort>=5.12.0
-flake8>=6.0.0
-mypy>=1.5.0
-
-# ==============================================================================
-# PLATFORM-SPECIFIC OPTIMIZATIONS
-# ==============================================================================
-# Uncomment based on deployment target:
-
-# For NVIDIA GPU support:
-# torch[cuda] 
-
-# For Apple Silicon optimization:
-# --extra-index-url https://download.pytorch.org/whl/cpu
-
-# For Intel MKL optimization:
-# intel-extension-for-pytorch
-
-# ==============================================================================
-# PRODUCTION EXTRAS
-# ==============================================================================
-# For production deployment:
-gunicorn>=21.2.0  # Production ASGI server
-redis>=4.6.0      # Caching/queuing
-celery>=5.3.0     # Background tasks
-
-# For monitoring:
-prometheus-client>=0.17.0
-sentry-sdk[fastapi]>=1.32.0
-
-# ==============================================================================
-# DOCKER & CONTAINER OPTIMIZATIONS  
-# ==============================================================================
-# Keep dependencies minimal in containers - use requirements-minimal.txt:
-# torch, ultralytics, fastapi, uvicorn, opencv-python-headless
+loguru>=0.7.0                 # Logging simples e poderoso
+imageio-ffmpeg>=0.4.9         # Essencial para processar vídeos

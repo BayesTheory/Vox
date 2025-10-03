@@ -1,0 +1,246 @@
+{
+  "tracking": {
+    "tracker": "bytetrack.yaml",
+    "inference": {
+      "device": "cpu",
+      "half_precision": false
+    },
+    "detection": {
+      "imgsz_cpu": 320,
+      "conf_threshold": 0.45,
+      "iou_threshold": 0.6,
+      "max_det": 25
+    },
+    "classification_model": {
+      "imgsz": 128,
+      "batch_size": 10,
+      "center_crop_margin": 0.15,
+      "min_crop_size": 10
+    },
+    "classification": {
+      "min_confidence": 0.35
+    },
+    "sampling": {
+      "classify_every": 5
+    },
+    "performance": {
+      "frame_stride": 2,
+      "detection_interval": 3,
+      "num_threads_cpu": 12,
+      "use_onnx": false,
+      "force_pytorch": true,
+      "force_classification_pytorch": true,
+      "force_individual_classification": false,
+      "enable_warmup": true,
+      "warmup_iterations": 3,
+      "enable_cache": true,
+      "cache_size": 500,
+      "cache_ttl": 20
+    },
+    "visualization": {
+      "draw_boxes": true,
+      "draw_track_id": true,
+      "draw_labels": true,
+      "draw_confidence": true,
+      "box_thickness": 2,
+      "font_scale": 0.6,
+      "font_thickness": 2
+    },
+    "output": {
+      "save_video": true,
+      "save_json": true,
+      "save_csv": true,
+      "video_codec": "mp4v",
+      "timeline_mode": "duplicate"
+    }
+  },
+
+  "api": {
+    "server": {
+      "host": "127.0.0.1",
+      "port": 8000,
+      "workers": 1,
+      "reload": false,
+      "debug": false
+    },
+    "upload": {
+      "max_file_size": 500,
+      "allowed_extensions": [".mp4", ".avi", ".mov", ".mkv"],
+      "upload_dir": "uploads",
+      "cleanup_after_hours": 24
+    },
+    "processing": {
+      "queue_size": 10,
+      "concurrent_jobs": 2,
+      "timeout_minutes": 30,
+      "use_async": true
+    },
+    "security": {
+      "rate_limit": 10,
+      "rate_window_minutes": 1,
+      "cors_enabled": true,
+      "allowed_origins": ["*"]
+    },
+    "response": {
+      "include_video": true,
+      "include_json": true,
+      "include_csv": true,
+      "compress_output": false
+    }
+  },
+
+  "datasets": {
+    "detection": {
+      "name": "vehicle_detection",
+      "path": "data/1/detrac_car",
+      "yaml": "detrac_car.yaml",
+      "nc": 1,
+      "names": ["vehicle"],
+      "task": "detect"
+    },
+    "classification": {
+      "name": "vehicle_colors",
+      "path": "data/2/COLOR_FINAL_YOLO",
+      "yaml": "",
+      "nc": 10,
+      "names": ["azul", "branco", "cinza", "marrom", "prata", "preto", "rosa", "verde", "vermelho", "amarelo"],
+      "task": "classify"
+    }
+  },
+
+  "training": {
+    "detection": {
+      "epochs": 100,
+      "batch": 16,
+      "imgsz": 640,
+      "device": "cpu",
+      "workers": 8,
+      "patience": 50,
+      "save_period": 10,
+      "lr0": 0.01,
+      "lrf": 0.1,
+      "cos_lr": true,
+      "weight_decay": 0.0005,
+      "amp": false,
+      "half": false,
+      "mosaic": 1.0,
+      "mixup": 0.1,
+      "copy_paste": 0.3,
+      "fliplr": 0.5,
+      "degrees": 10.0,
+      "translate": 0.1,
+      "scale": 0.5,
+      "shear": 2.0,
+      "perspective": 0.0001,
+      "hsv_h": 0.015,
+      "hsv_s": 0.7,
+      "hsv_v": 0.4
+    },
+    "classification": {
+      "epochs": 50,
+      "batch": 32,
+      "imgsz": 224,
+      "device": "cpu",
+      "workers": 8,
+      "patience": 20,
+      "save_period": 5,
+      "lr0": 0.005,
+      "lrf": 0.1,
+      "cos_lr": true,
+      "weight_decay": 0.0005,
+      "amp": false,
+      "half": false,
+      "fliplr": 0.5,
+      "degrees": 10.0,
+      "translate": 0.1,
+      "scale": 0.2,
+      "shear": 2.0,
+      "perspective": 0.0,
+      "hsv_h": 0.015,
+      "hsv_s": 0.7,
+      "hsv_v": 0.4,
+      "auto_augment": "randaugment",
+      "erasing": 0.4
+    },
+    "common": {
+      "seed": 42,
+      "deterministic": true,
+      "val": true,
+      "resume": false,
+      "project": "runs",
+      "exist_ok": true,
+      "verbose": true
+    }
+  },
+
+  "mlflow": {
+    "tracking_uri": "./mlruns",
+    "experiment_name": "VehicleColor_Training",
+    "run_name_prefix": "yolo11",
+    "log_models": true,
+    "log_artifacts": true,
+    "log_metrics": true,
+    "log_params": true,
+    "tags": {
+      "project": "vehicle_color_detection",
+      "framework": "ultralytics",
+      "version": "2.0"
+    }
+  },
+
+  "model_variants": {
+    "nano": {
+      "detect_weights": "yolo11n.pt",
+      "classify_weights": "yolo11n-cls.pt",
+      "description": "Fastest, lowest accuracy"
+    },
+    "small": {
+      "detect_weights": "yolo11s.pt", 
+      "classify_weights": "yolo11s-cls.pt",
+      "description": "Balanced speed and accuracy"
+    },
+    "medium": {
+      "detect_weights": "yolo11m.pt",
+      "classify_weights": "yolo11m-cls.pt", 
+      "description": "Higher accuracy, slower"
+    },
+    "large": {
+      "detect_weights": "yolo11l.pt",
+      "classify_weights": "yolo11l-cls.pt",
+      "description": "High accuracy, much slower"
+    },
+    "xlarge": {
+      "detect_weights": "yolo11x.pt",
+      "classify_weights": "yolo11x-cls.pt",
+      "description": "Highest accuracy, slowest"
+    }
+  },
+
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": "logs/vehicle_color.log",
+    "max_size": "10MB",
+    "backup_count": 5,
+    "console": true
+  },
+
+  "system": {
+    "auto_detect_hardware": true,
+    "prefer_gpu_when_available": true,
+    "memory_limit_mb": 4096,
+    "temp_dir": "temp",
+    "cleanup_on_exit": true,
+    "profiling_enabled": false
+  },
+
+  "project": {
+    "name": "Vehicle Color Detection System",
+    "version": "2.0.0",
+    "description": "Advanced vehicle detection and color classification system",
+    "author": "AI Development Team",
+    "license": "MIT",
+    "repository": "",
+    "model_family": "yolo11"
+  }
+}

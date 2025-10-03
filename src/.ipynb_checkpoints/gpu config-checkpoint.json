@@ -1,0 +1,53 @@
+{
+  "tracking": {
+    "tracker": "bytetrack.yaml",
+    "inference": {
+      "device": "cuda:0",
+      "half_precision": true
+    },
+    "detection": {
+      "imgsz_gpu": 640,
+      "imgsz_cpu": 416,
+      "conf_threshold": 0.25,
+      "iou_threshold": 0.7,
+      "max_det": 50
+    },
+    "classification_model": {
+      "imgsz": 224,
+      "batch_size": 32,
+      "center_crop_margin": 0.1
+    },
+    "classification": {
+      "min_confidence": 0.5
+    },
+    "sampling": {
+      "classify_every": 15,
+      "update_label_every": 30,
+      "area_change_threshold": 0.4
+    },
+    "performance": {
+      "frame_stride": 2,
+      "num_threads_cpu": 48,
+      "num_threads_gpu": 3584,
+      "prefer_onnx_cpu": false,
+      "cudnn_benchmark": true
+    },
+    "visualization": {
+      "draw_boxes": true,
+      "draw_track_id": true,
+      "draw_labels": true,
+      "draw_confidence": true,
+      "box_thickness": 2,
+      "font_scale": 0.6,
+      "font_thickness": 2
+    },
+    "output": {
+      "video_codec": "mp4v",
+      "timeline_mode": "duplicate",
+      "save_json": true,
+      "save_csv": true,
+      "json_indent": 2,
+      "csv_encoding": "utf-8"
+    }
+  }
+}

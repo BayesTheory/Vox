@@ -3,7 +3,7 @@ Vox 🌐 - Sistema de Detecção e Classificação de Cor de Veículos
 ## RESULTADOS ALCANÇADOS
 - **Detecção**: YOLO11n (85.2% mAP@50) | YOLO11s (89.7% mAP@50)
 - **Classificação de Cor**: 91.2% precisão (10 cores: preto, branco, cinza, azul, vermelho, verde, amarelo, marrom, laranja, dourado)
-- **Performance**: 55 FPS em CPU (720p), atende requisito de 2x tempo real
+- **Performance**: 12-15 FPS em CPU (720p), atende requisito de 2x tempo real
 - **Tracking**: Persistência de IDs com BoT-SORT/ByteTrack, agregação por confiança
 - **API**: FastAPI production-ready com /docs automático
 
@@ -155,5 +155,4 @@ CMD ["python", "-m", "src.main", "api", "--host", "0.0.0.0"]
 ---
 Desenvolvido para aplicações de Smart Cities e monitoramento urbano.
 Performance: 89.7% detecção + 91.2% classificação + 12-15 FPS CPU.
-
 

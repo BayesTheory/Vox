@@ -1,488 +1,899 @@
-# src/tracking/track.py
+# src/tracking/track.py - VERSÃO CONFIGURÁVEL SEM HARDCODE
+
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, List, Optional, Callable, Tuple
-from collections import defaultdict
-import json
-import csv
-import time
 import os
+import csv
+import json
+import time
+import warnings
+import threading
+import psutil
+from queue import Queue, Empty, Full
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections import defaultdict, deque
 
 import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
+from PIL import Image
 
-from src.utils.utils import load_config
+# ✅ CONFIGURAÇÕES BÁSICAS
+os.environ.update({
+    "ORT_LOGGING_LEVEL": "3", "ONNX_LOGGING_LEVEL": "3", "TF_CPP_MIN_LOG_LEVEL": "3",
+    "YOLO_VERBOSE": "False", "ULTRALYTICS_VERBOSE": "False"
+})
+warnings.filterwarnings("ignore")
 
+if torch.cuda.is_available():
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = True
 
-# ======================================================================
-# HSV / K-Means color classification
-# ======================================================================
+# =========================
+# Utilities
+# =========================
 
-COLOR_LABELS = [
-    "amarelo", "azul", "branco", "cinza_prata", "dourado",
-    "laranja", "marrom", "preto", "verde", "vermelho"
-]
+def round_to_stride(imgsz: int, stride: int = 32) -> int:
+    return max(stride, int((imgsz + stride - 1) // stride) * stride)
 
-def map_hsv_to_color_name(hsv_color: np.ndarray) -> str:
-    """
-    Mapeia HSV (OpenCV: H[0..179], S[0..255], V[0..255]) para um dos rótulos do dataset.
-    Regras heurísticas: acromáticos por S/V, depois faixas de H para cores cromáticas.
-    """
-    if hsv_color is None or hsv_color.shape[0] != 3:
-        return "cinza_prata"
+def get_center_crop(x1, y1, x2, y2, margin=0.15):
+    w, h = x2 - x1, y2 - y1
+    mx, my = int(w * margin), int(h * margin)
+    return max(x1, x1 + mx), max(y1, y1 + my), min(x2, x2 - mx), min(y2, y2 - my)
 
-    h, s, v = float(hsv_color[0]), float(hsv_color[1]), float(hsv_color[2])
+def load_config(config_path: str) -> Dict[str, Any]:
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
-    # Acromáticos
-    if s < 40:
-        if v < 60:
-            return "preto"
-        elif v > 195:
-            return "branco"
-        else:
-            return "cinza_prata"
+class FPSTracker:
+    def __init__(self, window_size=25):
+        self.window_size = window_size
+        self.frame_times = deque(maxlen=window_size)
+        self.start_time = time.perf_counter()
+        self.last_time = self.start_time
+        self.total_frames_processed = 0
+        self.frame_by_frame_fps = []
+        self.detection_times = deque(maxlen=window_size)
+        self.classification_times = deque(maxlen=window_size)
 
-    # Cromáticos por H
-    # Faixas ajustadas para o dataset
-    if (h >= 0 and h <= 8) or (h >= 170 and h <= 179):
-        return "vermelho"
-    if 9 <= h <= 20:
-        return "laranja"
-    if 21 <= h <= 33:
-        # amarelo/dourado: separar por valor (dourado tende a V um pouco menor)
-        return "dourado" if v < 160 else "amarelo"
-    if 34 <= h <= 85:
-        return "verde"
-    if 86 <= h <= 125:
-        return "azul"
-    # Tons quentes escuros: marrom em S alto e V médio-baixo
-    if 10 <= h <= 25 and v < 140:
-        return "marrom"
+    def update(self, detection_time=0, classification_time=0):
+        now = time.perf_counter()
+        dt = now - self.last_time
+        self.last_time = now
+        self.frame_times.append(dt)
+        self.total_frames_processed += 1
 
-    # Fallback
-    return "cinza_prata"
+        if detection_time > 0:
+            self.detection_times.append(detection_time)
+        if classification_time > 0:
+            self.classification_times.append(classification_time)
 
+        total_elapsed = now - self.start_time
+        instant_fps = 1.0 / max(dt, 1e-6)
+        smoothed_fps = len(self.frame_times) / max(sum(self.frame_times), 1e-6)
+        average_fps = self.total_frames_processed / max(total_elapsed, 1e-6)
 
-def get_dominant_color_kmeans(crop: np.ndarray, k: int = 4) -> Tuple[np.ndarray, float]:
-    """
-    Encontra cor dominante em HSV via K-Means, ponderando por S e V para evitar ruído acromático.
-    Retorna (HSV_dominante, confiança).
-    """
-    if crop is None or crop.size == 0:
-        return np.array([0, 0, 0], dtype=np.float32), 0.0
+        self.frame_by_frame_fps.append(round(instant_fps, 2))
 
-    # Redimensionar para acelerar
-    h, w = crop.shape[:2]
-    scale = 120.0 / max(h, w) if max(h, w) > 120 else 1.0
-    small = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        return {
+            "instant": instant_fps,
+            "smoothed": smoothed_fps,
+            "average": average_fps,
+            "elapsed": total_elapsed
+        }
 
-    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+    def get_summary(self):
+        total_time = time.perf_counter() - self.start_time
+        return {
+            "total_frames_processed": self.total_frames_processed,
+            "total_time_seconds": round(total_time, 2),
+            "total_time_formatted": self._format_time(total_time),
+            "average_fps": round(self.total_frames_processed / max(total_time, 1e-6), 2),
+            "avg_detection_time": round(sum(self.detection_times) / len(self.detection_times) if self.detection_times else 0, 4),
+            "avg_classification_time": round(sum(self.classification_times) / len(self.classification_times) if self.classification_times else 0, 4),
+        }
 
-    # Filtra pixels muito escuros/brilhantes com saturação baixa que confundem (opcional)
-    mask = (hsv[:, :, 1] > 20) | (hsv[:, :, 2] > 40)
-    pixels = hsv[mask].reshape(-1, 3).astype(np.float32)
-    if pixels.size == 0:
-        pixels = hsv.reshape(-1, 3).astype(np.float32)
+    @staticmethod
+    def _format_time(seconds):
+        h, m, s = int(seconds // 3600), int((seconds % 3600) // 60), int(seconds % 60)
+        if h > 0: return f"{h}h {m:02d}m {s:02d}s"
+        if m > 0: return f"{m}m {s:02d}s"
+        return f"{s}s"
 
-    # K-Means
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-    _, labels, centers = cv2.kmeans(pixels, k, None, criteria, 6, cv2.KMEANS_PP_CENTERS)
+# =========================
+# FrameWriter
+# =========================
 
-    # Pondera contagem por S e V (clusters mais saturados/visíveis ganham peso)
-    counts = np.bincount(labels.flatten(), minlength=k).astype(np.float32)
-    s_weight = np.clip(centers[:, 1] / 255.0, 0.5, 1.0)
-    v_weight = np.clip(centers[:, 2] / 255.0, 0.5, 1.0)
-    weighted = counts * (0.6 * s_weight + 0.4 * v_weight)
+class FrameWriter(threading.Thread):
+    def __init__(self, output_path, fourcc, fps, frame_size, processed_queue, timeline_mode="duplicate", frame_stride=1):
+        super().__init__(daemon=True)
+        self.processed_queue = processed_queue
+        self.stop_event = threading.Event()
+        self.frames_written = 0
+        self.frame_stride = frame_stride
 
-    idx = int(np.argmax(weighted))
-    dom = centers[idx]
-    conf = float(counts[idx] / max(1, counts.sum()))
-    return dom, conf
+        if timeline_mode == "duplicate":
+            self.output_fps = fps
+            self.duplicate_factor = frame_stride
+        elif timeline_mode == "fps_scale":
+            self.output_fps = max(1.0, fps / frame_stride)
+            self.duplicate_factor = 1
+        else:  # realtime
+            self.output_fps = fps
+            self.duplicate_factor = 1
 
+        self.writer = cv2.VideoWriter(str(output_path), fourcc, self.output_fps, frame_size)
+        if not self.writer.isOpened():
+            raise RuntimeError(f"Não foi possível abrir o VideoWriter: {output_path}")
 
-def classify_colors_hsv(crops: List[np.ndarray], infos: List[Tuple]) -> Dict[int, Tuple[str, float]]:
-    """Classifica por HSV/K-Means."""
-    new_labels: Dict[int, Tuple[str, float]] = {}
-    for crop, info in zip(crops, infos):
-        tid = info[4]
-        hsv_color, confidence = get_dominant_color_kmeans(crop)
-        color_name = map_hsv_to_color_name(hsv_color)
-        new_labels[tid] = (color_name, confidence)
-    return new_labels
-
-
-def classify_colors_ai(
-    cls_model: YOLO,
-    crops: List[np.ndarray],
-    infos: List[Tuple],
-    imgsz: int,
-    device: str,
-    half: bool,
-) -> Dict[int, Tuple[str, float]]:
-    """Classifica por modelo YOLO-cls com batch e fallback para batch=1 se ONNX for estático."""
-    new_labels: Dict[int, Tuple[str, float]] = {}
-    cls_names = cls_model.names
-
-    try:
-        results = cls_model.predict(
-            source=crops,
-            imgsz=imgsz,
-            device=device,
-            half=half,
-            verbose=False,
-            batch=len(crops)
-        )
-    except Exception as e:
-        if "invalid dimensions" in str(e) or "Got invalid dimensions" in str(e) or "Expected:" in str(e):
-            results = []
-            for c in crops:
-                ri = cls_model.predict(source=c, imgsz=imgsz, device=device, half=half, verbose=False, batch=1)
-                results.append(ri[0] if isinstance(ri, list) else ri)
-        else:
-            raise
-
-    for r0, info in zip(results, infos):
-        tid = info[4]
-        probs = r0.probs
-        top1_idx = int(probs.top1)
-        # alguns backends já retornam float nativo
-        top1_conf = float(probs.top1conf.cpu().item()) if hasattr(probs.top1conf, "cpu") else float(probs.top1conf)
-        color_name = cls_names[top1_idx]
-        new_labels[tid] = (color_name, top1_conf)
-    return new_labels
-
-
-# ======================================================================
-# ONNX helpers
-# ======================================================================
-
-def onnx_static_imgsz(model: YOLO) -> Optional[int]:
-    """Descobre H==W estático do ONNX (None se dinâmico)."""
-    try:
-        sess = getattr(model.model, "session", None)
-        if sess is None:
-            return None
-        inputs = sess.get_inputs()
-        if not inputs:
-            return None
-        shape = inputs[0].shape  # [N, C, H, W]
-        if len(shape) != 4:
-            return None
-        H, W = shape[2], shape[3]
-        if isinstance(H, int) and isinstance(W, int) and H == W and H > 0:
-            return int(H)
-        return None
-    except Exception:
-        return None
-
-
-def load_yolo_prefer_onnx(
-    weights_path: str,
-    imgsz: int,
-    task: str,
-    prefer_onnx: bool = True,
-    onnx_simplify: bool = True,
-    onnx_dynamic: bool = False,
-    verbose: bool = False,
-) -> Tuple[YOLO, str, Optional[Path]]:
-    """
-    Carrega YOLO preferindo ONNX; exporta se necessário; retorna (modelo, backend, path_onnx).
-    Usa task explícito e retorna o caminho exportado para permitir renomear se quiser.
-    """
-    wp = Path(weights_path)
-    if not wp.exists():
-        raise FileNotFoundError(f"Pesos não encontrados: {wp}")
-
-    onnx_path = None
-
-    if prefer_onnx:
-        # 1) Tenta carregar .onnx com mesmo stem
-        candidate = wp.with_suffix(".onnx")
-        if candidate.exists():
+    def run(self):
+        while not self.stop_event.is_set():
             try:
-                model = YOLO(str(candidate), task=task)
-                return model, "onnx", candidate
+                frame_data = self.processed_queue.get(timeout=1.0)
+                if frame_data is None:
+                    break
+
+                for _ in range(self.duplicate_factor):
+                    self.writer.write(frame_data['processed_frame'])
+                    self.frames_written += 1
+
+            except Empty:
+                continue
             except Exception as e:
-                if verbose:
-                    print(f"[WARN] Falha ao carregar {candidate}: {e}")
+                print(f"Erro na thread writer: {e}")
+                break
 
-        # 2) Exporta e carrega
+        self.writer.release()
+
+    def stop(self):
+        self.stop_event.set()
+
+# =========================
+# Model Loading - CONFIGURÁVEL
+# =========================
+
+def get_hardware_info():
+    """Detecta informações de hardware"""
+    info = {
+        "has_cuda": torch.cuda.is_available(),
+        "cpu_cores": psutil.cpu_count(logical=False),
+        "cpu_count": psutil.cpu_count(),
+        "ram_gb": psutil.virtual_memory().total / (1024**3)
+    }
+    
+    if info["has_cuda"]:
+        info["gpu_name"] = torch.cuda.get_device_name()
+        info["gpu_memory_gb"] = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    
+    return info
+
+def apply_performance_config(config: Dict[str, Any], hardware_info: Dict[str, Any]):
+    """✅ APLICA CONFIGURAÇÕES BASEADAS NO HARDWARE E CONFIG"""
+    
+    perf_cfg = config["tracking"]["performance"]
+    inference_cfg = config["tracking"]["inference"]
+    
+    # ✅ DETECÇÃO AUTOMÁTICA DE DEVICE
+    config_device = inference_cfg.get("device", "auto")
+    if config_device == "auto":
+        device = "cuda:0" if hardware_info["has_cuda"] else "cpu"
+    else:
+        device = config_device
+    
+    is_gpu = device.startswith("cuda")
+    
+    # ✅ APLICAR CONFIGURAÇÕES AUTOMÁTICAS SE NÃO ESPECIFICADAS
+    
+    # Threading
+    if perf_cfg.get("num_threads_cpu", 0) == 0 and not is_gpu:
+        optimal_threads = min(hardware_info["cpu_cores"], 8)
+        perf_cfg["num_threads_cpu"] = optimal_threads
+        print(f"🧵 Auto-config threads: {optimal_threads}")
+    
+    # Batch size
+    cls_cfg = config["tracking"]["classification_model"]
+    if cls_cfg.get("batch_size", 0) == 0:
+        if is_gpu:
+            gpu_memory = hardware_info.get("gpu_memory_gb", 4)
+            if gpu_memory >= 12:
+                cls_cfg["batch_size"] = 16
+            elif gpu_memory >= 8:
+                cls_cfg["batch_size"] = 8
+            else:
+                cls_cfg["batch_size"] = 4
+        else:
+            cls_cfg["batch_size"] = 2  # CPU conservador
+        print(f"📦 Auto-config batch size: {cls_cfg['batch_size']}")
+    
+    # Frame stride
+    if perf_cfg.get("frame_stride", 0) == 0:
+        perf_cfg["frame_stride"] = 2 if is_gpu else 3
+        print(f"⚡ Auto-config frame stride: {perf_cfg['frame_stride']}")
+    
+    # Image sizes
+    det_cfg = config["tracking"]["detection"]
+    if det_cfg.get("imgsz_cpu", 0) == 0:
+        det_cfg["imgsz_cpu"] = 640 if is_gpu else 416
+        print(f"🖼️ Auto-config detection imgsz: {det_cfg['imgsz_cpu']}")
+    
+    if cls_cfg.get("imgsz", 0) == 0:
+        cls_cfg["imgsz"] = 224 if is_gpu else 160
+        print(f"🎨 Auto-config classification imgsz: {cls_cfg['imgsz']}")
+    
+    # Sampling
+    sampling_cfg = config["tracking"]["sampling"]
+    if sampling_cfg.get("classify_every", 0) == 0:
+        sampling_cfg["classify_every"] = 3 if is_gpu else 5
+        print(f"🔄 Auto-config classify every: {sampling_cfg['classify_every']}")
+    
+    return device, is_gpu
+
+def load_models(det_weights: str, cls_weights: str, config: Dict[str, Any], device: str) -> Tuple[YOLO, YOLO, Dict[str, str]]:
+    """✅ CARREGAMENTO DE MODELOS CONFIGURÁVEL"""
+    
+    perf_cfg = config["tracking"]["performance"]
+    
+    # Verificar se deve forçar PyTorch
+    force_pytorch = perf_cfg.get("force_pytorch", False)
+    use_onnx = perf_cfg.get("use_onnx", True) and not force_pytorch
+    
+    is_gpu = device.startswith("cuda")
+    
+    print(f"🚀 Carregando modelos:")
+    print(f"   Device: {device}")
+    print(f"   Force PyTorch: {force_pytorch}")
+    print(f"   Use ONNX: {use_onnx}")
+    
+    backend_info = {}
+    
+    # ✅ CARREGAMENTO CONFIGURÁVEL DO DETECTOR
+    if is_gpu or not use_onnx:
+        print("📦 Detector: PyTorch (.pt)")
+        det_model = YOLO(str(det_weights), task="detect")
+        backend_info["detection"] = f"PyTorch-{device.upper()}"
+    else:
+        print("📦 Detector: Tentando ONNX...")
         try:
-            model_pt = YOLO(str(wp), task=task)
-            exported = model_pt.export(
-                format="onnx", imgsz=imgsz, simplify=onnx_simplify, dynamic=onnx_dynamic, verbose=verbose
-            )  # docs: cria 'stem.onnx' e retorna path
-            onnx_path = Path(exported) if exported else wp.with_suffix(".onnx")
-            model = YOLO(str(onnx_path), task=task)
-            return model, "onnx", onnx_path
+            det_onnx_path = Path(det_weights).with_suffix(".onnx")
+            
+            if not det_onnx_path.exists():
+                print("   Exportando para ONNX...")
+                det_temp = YOLO(str(det_weights), task="detect")
+                det_imgsz = config["tracking"]["detection"]["imgsz_cpu"]
+                det_temp.export(format="onnx", imgsz=det_imgsz, simplify=True, verbose=False)
+            
+            det_model = YOLO(str(det_onnx_path), task="detect")
+            
+            # Configurar ONNX
+            num_threads = perf_cfg.get("num_threads_cpu", 4)
+            _configure_onnx_cpu(det_model, num_threads)
+            
+            backend_info["detection"] = f"ONNX-CPU-{num_threads}T"
+            print(f"   ✅ ONNX detector carregado ({num_threads} threads)")
+            
         except Exception as e:
-            if verbose:
-                print(f"[WARN] Export ONNX falhou ({wp}): {e}. Fallback para .pt.")
+            print(f"   ⚠️ ONNX falhou: {e}")
+            print("   📦 Fallback para PyTorch")
+            det_model = YOLO(str(det_weights), task="detect")
+            backend_info["detection"] = "PyTorch-CPU-Fallback"
+    
+    # ✅ CARREGAMENTO CONFIGURÁVEL DO CLASSIFICADOR
+    force_cls_pytorch = perf_cfg.get("force_classification_pytorch", True)  # Padrão True para estabilidade
+    
+    if is_gpu or not use_onnx or force_cls_pytorch:
+        print("🎨 Classificador: PyTorch (.pt) - RECOMENDADO")
+        cls_model = YOLO(str(cls_weights), task="classify")
+        backend_info["classification"] = f"PyTorch-{device.upper()}-Stable"
+    else:
+        print("🎨 Classificador: Tentando ONNX...")
+        try:
+            cls_onnx_path = Path(cls_weights).with_suffix(".onnx")
+            
+            if not cls_onnx_path.exists():
+                print("   Exportando classificador para ONNX...")
+                cls_temp = YOLO(str(cls_weights), task="classify")
+                cls_imgsz = config["tracking"]["classification_model"]["imgsz"]
+                cls_temp.export(format="onnx", imgsz=cls_imgsz, simplify=True, verbose=False)
+            
+            cls_model = YOLO(str(cls_onnx_path), task="classify")
+            
+            # Configurar ONNX
+            num_threads = perf_cfg.get("num_threads_cpu", 4)
+            _configure_onnx_cpu(cls_model, num_threads)
+            
+            backend_info["classification"] = f"ONNX-CPU-{num_threads}T-EXPERIMENTAL"
+            print(f"   ⚠️ ONNX classificador carregado (experimental)")
+            
+        except Exception as e:
+            print(f"   ❌ ONNX classificador falhou: {e}")
+            print("   🔧 Forçando PyTorch para classificador")
+            cls_model = YOLO(str(cls_weights), task="classify")
+            backend_info["classification"] = "PyTorch-CPU-ForceStable"
+    
+    return det_model, cls_model, backend_info
 
-    # 3) Fallback .pt
-    model = YOLO(str(wp), task=task)
-    return model, "pt", None
+def _configure_onnx_cpu(yolo_model, num_threads):
+    """Configura ONNX para CPU"""
+    try:
+        import onnxruntime as ort
+        so = ort.SessionOptions()
+        so.intra_op_num_threads = num_threads
+        so.inter_op_num_threads = max(1, num_threads // 2)
+        so.execution_mode = ort.ExecutionMode.ORT_PARALLEL
+        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        so.log_severity_level = 4
 
+        providers = [("CPUExecutionProvider", {"intra_op_num_threads": num_threads})]
 
-# ======================================================================
-# Main
-# ======================================================================
+        if hasattr(yolo_model.model, 'model_path'):
+            model_path = yolo_model.model.model_path
+            new_session = ort.InferenceSession(model_path, sess_options=so, providers=providers)
+            yolo_model.model.session = new_session
+    except Exception as e:
+        print(f"Erro configurando ONNX: {e}")
+
+# =========================
+# Classification - CONFIGURÁVEL
+# =========================
+
+def classify_colors_smart(cls_model, crops, infos, config: Dict[str, Any], device: str):
+    """✅ CLASSIFICAÇÃO INTELIGENTE BASEADA NO CONFIG"""
+    if not crops:
+        return {}
+
+    cls_cfg = config["tracking"]["classification_model"]
+    cls_min_conf = config["tracking"]["classification"]["min_confidence"]
+    
+    # Parâmetros do config
+    imgsz = cls_cfg["imgsz"]
+    batch_size = cls_cfg["batch_size"]
+    use_half = config["tracking"]["inference"].get("half_precision", False) and device.startswith("cuda")
+    individual_mode = config["tracking"]["performance"].get("force_individual_classification", False)
+    
+    new_labels = {}
+    cls_names = cls_model.names
+    
+    # ✅ CONVERSÃO CONFIGURÁVEL PARA PIL
+    valid_crops = []
+    valid_infos = []
+    
+    min_crop_size = cls_cfg.get("min_crop_size", 10)
+    
+    for crop, info in zip(crops, infos):
+        try:
+            # Validar com tamanho configurável
+            if crop.shape[0] < min_crop_size or crop.shape[1] < min_crop_size:
+                continue
+            
+            # Conversão BGR -> RGB -> PIL
+            if len(crop.shape) == 3 and crop.shape[2] == 3:
+                crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+            else:
+                crop_rgb = crop
+            
+            pil_crop = Image.fromarray(crop_rgb)
+            valid_crops.append(pil_crop)
+            valid_infos.append(info)
+            
+        except Exception as e:
+            continue
+    
+    if not valid_crops:
+        return {}
+    
+    print(f"🎨 Classificando {len(valid_crops)} crops (batch={batch_size}, individual={individual_mode})")
+    
+    # ✅ MODO CONFIGURÁVEL: BATCH OU INDIVIDUAL
+    if individual_mode or batch_size == 1:
+        # Modo individual (mais estável)
+        for crop, info in zip(valid_crops, valid_infos):
+            try:
+                with torch.no_grad():
+                    result = cls_model.predict(
+                        source=crop,
+                        imgsz=imgsz,
+                        device=device,
+                        half=use_half,
+                        verbose=False,
+                        batch=False
+                    )
+                
+                tid = info[4] if len(info) > 4 else info[-1]
+                
+                if result.probs is not None:
+                    probs = result.probs
+                    top1_idx = int(probs.top1)
+                    
+                    if hasattr(probs.top1conf, "cpu"):
+                        top1_conf = float(probs.top1conf.cpu().item())
+                    else:
+                        top1_conf = float(probs.top1conf)
+                    
+                    if top1_conf >= cls_min_conf:
+                        color_name = cls_names[top1_idx]
+                        new_labels[tid] = (color_name, top1_conf)
+                        
+            except Exception as e:
+                continue
+    else:
+        # Modo batch (mais rápido se funcionar)
+        for i in range(0, len(valid_crops), batch_size):
+            batch_crops = valid_crops[i:i+batch_size]
+            batch_infos = valid_infos[i:i+batch_size]
+            
+            try:
+                with torch.no_grad():
+                    results = cls_model.predict(
+                        source=batch_crops,
+                        imgsz=imgsz,
+                        device=device,
+                        half=use_half,
+                        verbose=False,
+                        batch=len(batch_crops)
+                    )
+                
+                for result, info in zip(results, batch_infos):
+                    tid = info[4] if len(info) > 4 else info[-1]
+                    
+                    if result.probs is not None:
+                        probs = result.probs
+                        top1_idx = int(probs.top1)
+                        
+                        if hasattr(probs.top1conf, "cpu"):
+                            top1_conf = float(probs.top1conf.cpu().item())
+                        else:
+                            top1_conf = float(probs.top1conf)
+                        
+                        if top1_conf >= cls_min_conf:
+                            color_name = cls_names[top1_idx]
+                            new_labels[tid] = (color_name, top1_conf)
+                            
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "dimension" in error_msg or "batch" in error_msg:
+                    print(f"⚠️ Erro de batch detectado, alternando para modo individual")
+                    # Reprocessar este batch individualmente
+                    for crop, info in zip(batch_crops, batch_infos):
+                        try:
+                            with torch.no_grad():
+                                result = cls_model.predict(
+                                    source=crop,
+                                    imgsz=imgsz,
+                                    device=device,
+                                    half=use_half,
+                                    verbose=False,
+                                    batch=False
+                                )
+                            
+                            tid = info[4] if len(info) > 4 else info[-1]
+                            
+                            if result.probs is not None:
+                                probs = result.probs
+                                top1_idx = int(probs.top1)
+                                
+                                if hasattr(probs.top1conf, "cpu"):
+                                    top1_conf = float(probs.top1conf.cpu().item())
+                                else:
+                                    top1_conf = float(probs.top1conf)
+                                
+                                if top1_conf >= cls_min_conf:
+                                    color_name = cls_names[top1_idx]
+                                    new_labels[tid] = (color_name, top1_conf)
+                                    
+                        except Exception:
+                            continue
+                else:
+                    print(f"⚠️ Erro no batch {i//batch_size}: {e}")
+                    continue
+    
+    return new_labels
+
+def draw_metrics_overlay(frame, fps_stats, frame_idx, total_frames_proc, eta, num_detections=0, fps_raw_equiv=None):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale, thickness, color = 0.6, 2, (0, 255, 0)
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (5, 5), (480, 140), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+
+    texts = [
+        f"FPS: {fps_stats['instant']:.1f} | Smooth: {fps_stats['smoothed']:.1f}",
+        f"Proc: {frame_idx + 1}/{max(1,total_frames_proc)} ({100*(frame_idx+1)/max(1,total_frames_proc):.1f}%)",
+        f"ETA: {eta}",
+        f"Objects: {num_detections}",
+    ]
+
+    if fps_raw_equiv:
+        texts.insert(1, f"Raw FPS: {fps_raw_equiv:.1f}")
+
+    for i, text in enumerate(texts):
+        cv2.putText(frame, text, (10, 25 + i*20), font, font_scale, color, thickness)
+
+# =========================
+# MAIN FUNCTION - TOTALMENTE CONFIGURÁVEL
+# =========================
 
 def process_video_tracking(
     video_path: str,
     det_weights: str,
-    cls_weights: Optional[str],
-    config_path: str = "src/config.json",
+    cls_weights: str,
+    config_path: str,
     out_dir: Optional[str] = None,
-    device: str = "auto",
-    progress_cb: Optional[Callable[[int], None]] = None,
-) -> Dict:
-
-    cfg = load_config(config_path)
-    tcfg = cfg.get("tracking", {})
-
-    # Modo de cor
-    color_mode = tcfg.get("color_classifier_mode", "hsv").lower()
-    if color_mode not in ("hsv", "ai"):
-        raise ValueError("color_classifier_mode deve ser 'hsv' ou 'ai'.")
-
-    # ONNX flags
-    prefer_onnx = bool(tcfg.get("prefer_onnx", True))
-    onnx_simplify = bool(tcfg.get("onnx_simplify", True))
-    onnx_dynamic_cls = bool(tcfg.get("onnx_dynamic_cls", True))
-    verbose_export = bool(tcfg.get("onnx_verbose", False))
-
-    # Tracker/params
-    tracker_yaml = tcfg.get("tracker", "bytetrack.yaml")
-    det_imgsz_cpu = int(tcfg.get("det_imgsz_cpu", 320))
-    det_imgsz_gpu = int(tcfg.get("det_imgsz_gpu", 416))
-    conf_thres = float(tcfg.get("conf_thres", 0.25))
-    iou_thres = float(tcfg.get("iou_thres", 0.7))
-    cls_imgsz = int(tcfg.get("cls_imgsz", 224))
-    sample_every = int(tcfg.get("sample_every", 5))
-    min_cls_conf = float(tcfg.get("min_cls_conf", 0.6))
-    refresh_every = int(tcfg.get("refresh_every", 40))
-    area_change_pct = float(tcfg.get("area_change_pct", 0.3))
-
-    # Device
-    if device == "auto":
-        device = "0" if torch.cuda.is_available() else "cpu"
-    use_half = (device != "cpu")
-
-    # IO
-    src = Path(video_path).resolve()
-    if not src.exists():
-        raise FileNotFoundError(f"Vídeo não encontrado: {src}")
-    out_root = Path(out_dir).resolve() if out_dir else src.parent / "tracking_results"
-    out_root.mkdir(parents=True, exist_ok=True)
-    stem = src.stem
-
-    cap = cv2.VideoCapture(str(src))
-    if not cap.isOpened():
-        raise RuntimeError(f"Não foi possível abrir o vídeo: {src}")
-    try:
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    except Exception:
-        pass
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
-    fps_src = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    cap.release()
-
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out_video_path = out_root / f"{stem}_annotated.mp4"
-    writer = cv2.VideoWriter(str(out_video_path), fourcc, fps_src, (w, h))
-
-    # Load models
-    det_imgsz_base = det_imgsz_gpu if use_half else det_imgsz_cpu
-    det_model, det_backend, det_onnx_path = load_yolo_prefer_onnx(
-        det_weights, det_imgsz_base, task="detect",
-        prefer_onnx=prefer_onnx, onnx_simplify=onnx_simplify, onnx_dynamic=False, verbose=verbose_export
-    )
-
-    cls_model, cls_backend, cls_onnx_path = None, "hsv", None
-    if color_mode == "ai":
-        if not cls_weights:
-            raise ValueError("cls_weights obrigatório quando color_classifier_mode='ai'.")
-        cls_model, cls_backend, cls_onnx_path = load_yolo_prefer_onnx(
-            cls_weights, cls_imgsz, task="classify",
-            prefer_onnx=prefer_onnx, onnx_simplify=onnx_simplify, onnx_dynamic=onnx_dynamic_cls, verbose=verbose_export
-        )
-
-    # Harmoniza imgsz efetivo com ONNX estático (se houver)
-    det_imgsz_eff = det_imgsz_base
-    if det_backend == "onnx":
-        s = onnx_static_imgsz(det_model)
-        if s:
-            det_imgsz_eff = s
-
-    cls_imgsz_eff = cls_imgsz
-    if color_mode == "ai" and cls_backend == "onnx":
-        s = onnx_static_imgsz(cls_model)
-        if s:
-            cls_imgsz_eff = s
-
-    # Warm-up
-    try:
-        _ = det_model.predict(np.zeros((det_imgsz_eff, det_imgsz_eff, 3), dtype=np.uint8),
-                              device=device, imgsz=det_imgsz_eff, half=use_half, verbose=False)
-        if color_mode == "ai":
-            _ = cls_model.predict(np.zeros((cls_imgsz_eff, cls_imgsz_eff, 3), dtype=np.uint8),
-                                  device=device, imgsz=cls_imgsz_eff, half=use_half, verbose=False)
-    except Exception:
-        pass
-
-    # Tracking stream
-    stream = det_model.track(
-        source=str(src),
-        tracker=tracker_yaml,
-        persist=True,
-        stream=True,
-        device=device,
-        imgsz=det_imgsz_eff,
-        conf=conf_thres,
-        iou=iou_thres,
-        half=use_half,
-        verbose=False,
-        save=False,
-        # Opcional pro desempenho:
-        # classes=[0],
-        # max_det=50,
-        # vid_stride=1,
-    )
-
-    # States
-    def id_color(i: int) -> Tuple[int, int, int]:
-        rng = np.random.default_rng(abs(int(i)) + 12345)
-        return tuple(int(c) for c in rng.integers(64, 255, size=3))
-
-    tracks = defaultdict(lambda: {"start_frame": None, "end_frame": None, "color_votes": defaultdict(float), "confidences": []})
-    last_label: Dict[int, Tuple[str, float]] = {}
-    last_cls_frame: Dict[int, int] = {}
-    last_area: Dict[int, int] = {}
-
-    frame_idx = -1
-    smooth_fps = 0.0
-    t_prev = time.time()
-
-    # Loop
-    for result in stream:
-        frame_idx += 1
-        frame = result.orig_img
-        boxes = getattr(result, "boxes", None)
-
-        # FPS
-        t_now = time.time()
-        dt = max(1e-6, t_now - t_prev)
-        inst_fps = 1.0 / dt
-        smooth_fps = 0.9 * smooth_fps + 0.1 * inst_fps if smooth_fps > 0 else inst_fps
-        t_prev = t_now
-
-        need_cls_infos: List[Tuple[int, int, int, int, int]] = []
-        on_sample = (frame_idx % sample_every == 0)
-
-        if boxes is not None and boxes.xyxy is not None and boxes.id is not None:
-            xyxy = boxes.xyxy
-            ids = boxes.id
-            xyxy = xyxy.cpu().numpy() if hasattr(xyxy, "cpu") else np.asarray(xyxy)
-            ids = ids.cpu().numpy() if hasattr(ids, "cpu") else np.asarray(ids)
-
-            for (x1, y1, x2, y2), tid in zip(xyxy, ids):
-                tid = int(tid)
-                x1, y1, x2, y2 = map(int, [max(0, x1), max(0, y1), min(w, x2), min(h, y2)])
-                if x2 <= x1 or y2 <= y1:
-                    continue
-
-                # area change
-                area = (x2 - x1) * (y2 - y1)
-                area_changed = False
-                if tid in last_area:
-                    a0 = max(1, last_area[tid])
-                    area_changed = (abs(area - a0) / a0) >= area_change_pct
-                last_area[tid] = area
-
-                # decide classificar
-                is_new = (tid not in last_label)
-                low_conf = (not is_new) and (last_label[tid][1] < min_cls_conf)
-                need_refresh = (tid in last_cls_frame) and ((frame_idx - last_cls_frame[tid]) >= refresh_every)
-
-                if on_sample and (is_new or low_conf or need_refresh or area_changed):
-                    need_cls_infos.append((x1, y1, x2, y2, tid))
-
-            # classificação
-            if need_cls_infos:
-                crops = [frame[y1:y2, x1:x2] for (x1, y1, x2, y2, _) in need_cls_infos]
-
-                if color_mode == "ai":
-                    new_labels = classify_colors_ai(cls_model, crops, need_cls_infos, imgsz=cls_imgsz_eff, device=device, half=use_half)
-                else:
-                    new_labels = classify_colors_hsv(crops, need_cls_infos)
-
-                for tid, (color_name, conf) in new_labels.items():
-                    tracks[tid]["color_votes"][color_name] += conf
-                    tracks[tid]["confidences"].append(conf)
-                    last_label[tid] = (color_name, conf)
-                    last_cls_frame[tid] = frame_idx
-
-            # desenha
-            for (x1, y1, x2, y2), tid in zip(xyxy.astype(int), ids.astype(int)):
-                c = id_color(int(tid))
-                cv2.rectangle(frame, (x1, y1), (x2, y2), c, 2)
-                if int(tid) in last_label:
-                    color_name, conf = last_label[int(tid)]
-                    label = f"ID:{int(tid)} {color_name} {conf:.2f}"
-                    ty = max(18, y1 - 8)
-                    (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                    cv2.rectangle(frame, (x1, ty - th - 6), (x1 + tw + 10, ty + 4), (0, 0, 0), -1)
-                    cv2.putText(frame, label, (x1 + 5, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-
-        # header
-        progress_pct = 100.0 * (frame_idx + 1) / max(1, total_frames)
-        header = f"FPS:{smooth_fps:.1f} | Prog:{progress_pct:.1f}% | det:{det_backend}:{det_imgsz_eff} cls:{'hsv' if color_mode=='hsv' else cls_backend}:{cls_imgsz_eff}"
-        (tw, th), _ = cv2.getTextSize(header, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-        cv2.rectangle(frame, (10, 10), (10 + tw + 16, 10 + th + 16), (0, 0, 0), -1)
-        cv2.putText(frame, header, (18, 10 + th + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-        writer.write(frame)
-
-    writer.release()
-
-    # Saídas agregadas
-    records: List[Dict] = []
-    for track_id, t in tracks.items():
-        if not t["confidences"]:
-            continue
-        final_color = max(t["color_votes"].items(), key=lambda kv: kv[1])[0]
-        mean_conf = float(sum(t["confidences"]) / len(t["confidences"]))
-        records.append({
-            "video_id": stem,
-            "track_id": int(track_id),
-            "frame_inicial": int(t["start_frame"]) if t["start_frame"] is not None else 0,
-            "frame_final": int(t["end_frame"]) if t["end_frame"] is not None else 0,
-            "cor": final_color,
-            "confianca_media": round(mean_conf, 6),
+    progress_cb: Optional[Callable[[int, int], None]] = None,
+) -> Dict[str, Any]:
+    """
+    ✅ FUNÇÃO PRINCIPAL TOTALMENTE CONFIGURÁVEL PELO CONFIG.JSON
+    """
+    
+    # ✅ CARREGAR CONFIG
+    config = load_config(config_path)
+    cfg = config["tracking"]
+    
+    # ✅ DETECTAR HARDWARE E APLICAR CONFIGURAÇÕES
+    hardware_info = get_hardware_info()
+    device, is_gpu = apply_performance_config(config, hardware_info)
+    
+    print(f"🎯 TRACKING CONFIGURÁVEL iniciando...")
+    print(f"   🔧 Device: {device}")
+    print(f"   💻 Hardware: {'GPU' if is_gpu else 'CPU'}")
+    print(f"   📊 Config: {config_path}")
+    
+    # ✅ CONFIGURAR THREADING SE CPU
+    if not is_gpu:
+        num_threads = cfg["performance"]["num_threads_cpu"]
+        os.environ.update({
+            "OMP_NUM_THREADS": str(num_threads),
+            "MKL_NUM_THREADS": str(num_threads),
+            "NUMEXPR_NUM_THREADS": str(num_threads)
         })
-
-    json_path = out_root / f"{stem}_tracks.json"
-    csv_path = out_root / f"{stem}_tracks.csv"
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer_csv = csv.DictWriter(f, fieldnames=["video_id", "track_id", "frame_inicial", "frame_final", "cor", "confianca_media"])
-        writer_csv.writeheader()
-        writer_csv.writerows(records)
-
-    summary: Dict[str, int] = defaultdict(int)
-    for r in records:
-        summary[r["cor"]] += 1
-
+        cv2.setNumThreads(num_threads)
+        torch.set_num_threads(num_threads)
+        print(f"   🧵 CPU Threads: {num_threads}")
+    
+    # Setup dos paths
+    video_path_obj = Path(video_path)
+    if not video_path_obj.exists():
+        raise FileNotFoundError(f"Vídeo não encontrado: {video_path}")
+    
+    # Informações do vídeo
+    cap = cv2.VideoCapture(str(video_path_obj))
+    if not cap.isOpened():
+        raise RuntimeError(f"Não foi possível abrir o vídeo: {video_path}")
+    
+    video_info = {
+        'total_frames': int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+        'fps': cap.get(cv2.CAP_PROP_FPS),
+        'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+        'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+    }
+    cap.release()
+    
+    out_dir_path = Path(out_dir) if out_dir else video_path_obj.parent / f"{video_path_obj.stem}_output"
+    out_dir_path.mkdir(parents=True, exist_ok=True)
+    suffix = "gpu" if is_gpu else "cpu"
+    out_video_path = out_dir_path / f"{video_path_obj.stem}_tracking_{suffix}.mp4"
+    timeline_mode = str(cfg["output"]["timeline_mode"])
+    
+    # ✅ CARREGAR MODELOS COM BASE NO CONFIG
+    det_model, cls_model, backend_info = load_models(det_weights, cls_weights, config, device)
+    
+    # ✅ WARM-UP CONFIGURÁVEL
+    enable_warmup = cfg["performance"].get("enable_warmup", True)
+    if enable_warmup:
+        warmup_iterations = cfg["performance"].get("warmup_iterations", 3)
+        print(f"🔥 Warm-up ({warmup_iterations} iterações)...")
+        
+        det_imgsz = cfg["detection"]["imgsz_cpu"]
+        cls_imgsz = cfg["classification_model"]["imgsz"]
+        
+        dummy_det = np.zeros((det_imgsz, det_imgsz, 3), dtype=np.uint8)
+        dummy_cls = Image.fromarray(np.zeros((cls_imgsz, cls_imgsz, 3), dtype=np.uint8))
+        
+        for _ in range(warmup_iterations):
+            with torch.no_grad():
+                _ = det_model.predict(dummy_det, device=device, verbose=False)
+                _ = cls_model.predict(dummy_cls, device=device, verbose=False)
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    
+    # Setup do FrameWriter
+    processed_queue = Queue(maxsize=30)
+    frame_stride = cfg["performance"]["frame_stride"]
+    writer = FrameWriter(
+        str(out_video_path),
+        cv2.VideoWriter_fourcc(*cfg["output"]["video_codec"]),
+        video_info['fps'],
+        (video_info['width'], video_info['height']),
+        processed_queue,
+        timeline_mode,
+        frame_stride
+    )
+    writer.start()
+    
+    # ✅ TODAS AS CONFIGURAÇÕES VÊM DO CONFIG
+    det_conf = cfg["detection"]["conf_threshold"]
+    det_iou = cfg["detection"]["iou_threshold"]
+    max_det = cfg["detection"]["max_det"]
+    center_crop_margin = cfg["classification_model"]["center_crop_margin"]
+    classification_interval = cfg["sampling"]["classify_every"]
+    use_half = cfg["inference"]["half_precision"] and is_gpu
+    
+    # Setup do loop principal
+    tracks = defaultdict(lambda: {"start_frame": -1, "end_frame": 0, "color_votes": defaultdict(float), "confidences": []})
+    last_known_color = {}
+    fps_tracker = FPSTracker()
+    total_frames_proc = max(1, video_info['total_frames'] // frame_stride)
+    
+    classification_counter = 0
+    
+    print(f"🚀 Configurações aplicadas:")
+    print(f"   📹 {video_info['total_frames']} frames @ {video_info['fps']:.2f} FPS")
+    print(f"   ⚡ Frame stride: {frame_stride} (~{total_frames_proc} frames)")
+    print(f"   🎨 Classify every: {classification_interval} frames")
+    print(f"   📦 Batch size: {cfg['classification_model']['batch_size']}")
+    print(f"   🔧 Backend: {backend_info['detection']} | {backend_info['classification']}")
+    
+    # ✅ STREAM YOLO CONFIGURÁVEL
+    stream_config = {
+        'source': str(video_path_obj),
+        'stream': True,
+        'persist': True,
+        'tracker': cfg["tracker"],
+        'device': device,
+        'imgsz': cfg["detection"]["imgsz_cpu"],
+        'conf': det_conf,
+        'iou': det_iou,
+        'half': use_half,
+        'verbose': False,
+        'max_det': max_det,
+        'save': False,
+        'show': False,
+    }
+    
+    if frame_stride > 1:
+        stream_config['vid_stride'] = frame_stride
+    
+    stream = det_model.track(**stream_config)
+    
+    try:
+        for processed_frame_idx, result in enumerate(stream):
+            frame_idx = processed_frame_idx * frame_stride
+            
+            # ✅ TIMING COM CUDA SYNC
+            det_start = time.perf_counter()
+            processed_frame = result.orig_img.copy()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            det_time = time.perf_counter() - det_start
+            
+            # ✅ CLASSIFICAÇÃO CONFIGURÁVEL
+            classification_counter += 1
+            should_classify = classification_counter % classification_interval == 0
+            
+            need_cls_infos = []
+            num_detections = 0
+            cls_time = 0
+            
+            if result.boxes is not None and result.boxes.id is not None:
+                num_detections = len(result.boxes)
+                
+                for box in result.boxes:
+                    if box.id is None:
+                        continue
+                    
+                    try:
+                        track_id = int(box.id[0])
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        
+                        if tracks[track_id]["start_frame"] == -1:
+                            tracks[track_id]["start_frame"] = frame_idx
+                        tracks[track_id]["end_frame"] = frame_idx
+                        
+                        if should_classify:
+                            cx1, cy1, cx2, cy2 = get_center_crop(x1, y1, x2, y2, center_crop_margin)
+                            min_size = cfg["classification_model"].get("min_crop_size", 10)
+                            if (cx2 - cx1) >= min_size and (cy2 - cy1) >= min_size:
+                                need_cls_infos.append((cx1, cy1, cx2, cy2, track_id))
+                                
+                    except (TypeError, IndexError, ValueError):
+                        continue
+                
+                # ✅ CLASSIFICAÇÃO CONFIGURÁVEL
+                if need_cls_infos:
+                    cls_start = time.perf_counter()
+                    
+                    # Criar crops
+                    crops = []
+                    valid_infos = []
+                    
+                    for (x1, y1, x2, y2, tid) in need_cls_infos:
+                        # Validar coordenadas
+                        x1 = max(0, x1)
+                        y1 = max(0, y1)
+                        x2 = min(processed_frame.shape[1], x2)
+                        y2 = min(processed_frame.shape[0], y2)
+                        
+                        min_size = cfg["classification_model"].get("min_crop_size", 10)
+                        if (x2 - x1) >= min_size and (y2 - y1) >= min_size:
+                            crop = processed_frame[y1:y2, x1:x2].copy()
+                            crops.append(crop)
+                            valid_infos.append((x1, y1, x2, y2, tid))
+                    
+                    if crops:
+                        new_labels = classify_colors_smart(
+                            cls_model, crops, valid_infos, config, device
+                        )
+                        
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize()
+                        
+                        cls_time = time.perf_counter() - cls_start
+                        
+                        # Processar resultados
+                        for tid, (color_name, conf) in new_labels.items():
+                            tracks[tid]["color_votes"][color_name] += conf
+                            tracks[tid]["confidences"].append(conf)
+                            last_known_color[tid] = (color_name, conf)
+            
+            # ✅ VISUALIZAÇÃO CONFIGURÁVEL
+            vis_cfg = cfg["visualization"]
+            if vis_cfg["draw_boxes"] and result.boxes is not None:
+                for box in result.boxes:
+                    if box.id is None:
+                        continue
+                    
+                    try:
+                        track_id = int(box.id[0])
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        
+                        # Cor consistente por track
+                        np.random.seed(track_id)
+                        box_color = tuple(int(c) for c in np.random.randint(64, 255, size=3))
+                        
+                        cv2.rectangle(processed_frame, (x1, y1), (x2, y2), box_color, vis_cfg["box_thickness"])
+                        
+                        label = []
+                        if vis_cfg["draw_track_id"]:
+                            label.append(f"ID:{track_id}")
+                        if track_id in last_known_color:
+                            color_name, conf = last_known_color[track_id]
+                            if vis_cfg["draw_labels"]:
+                                label.append(color_name)
+                            if vis_cfg["draw_confidence"]:
+                                label.append(f"{conf:.2f}")
+                        
+                        if label:
+                            label_text = " ".join(label)
+                            (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX,
+                                                          vis_cfg["font_scale"], vis_cfg["font_thickness"])
+                            cv2.rectangle(processed_frame, (x1, y1 - th - 10), (x1 + tw + 5, y1), box_color, -1)
+                            cv2.putText(processed_frame, label_text, (x1 + 3, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX,
+                                        vis_cfg["font_scale"], (255,255,255), vis_cfg["font_thickness"])
+                    except (TypeError, IndexError, ValueError):
+                        continue
+            
+            # Overlay com informações
+            fps_stats = fps_tracker.update(det_time, cls_time)
+            fps_raw_equiv = fps_stats["instant"] * frame_stride
+            eta = fps_tracker._format_time((total_frames_proc - processed_frame_idx - 1) / max(1e-6, fps_stats["smoothed"]))
+            
+            draw_metrics_overlay(processed_frame, fps_stats, processed_frame_idx,
+                               total_frames_proc, eta, num_detections, fps_raw_equiv)
+            
+            # Envia para escrita
+            try:
+                processed_queue.put({
+                    'processed_frame_idx': processed_frame_idx,
+                    'processed_frame': processed_frame
+                }, timeout=0.1)
+            except Full:
+                pass
+            
+            if progress_cb and processed_frame_idx % 10 == 0:
+                progress_cb(min(processed_frame_idx + 1, total_frames_proc), total_frames_proc)
+    
+    except KeyboardInterrupt:
+        print("\n⚠️ Interrompido")
+    except Exception as e:
+        print(f"\n❌ Erro: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        print("🔄 Finalizando...")
+        processed_queue.put(None)
+        writer.join(timeout=10)
+        print(f"✅ Finalizado. Frames: {fps_tracker.total_frames_processed}")
+    
+    # Resultados
+    performance_summary = fps_tracker.get_summary()
+    performance_summary.update({
+        "fps_model": performance_summary["average_fps"],
+        "fps_raw_equiv": performance_summary["average_fps"] * frame_stride,
+        "processed_frames_total": fps_tracker.total_frames_processed,
+        "timeline_mode": timeline_mode,
+        "config_used": cfg,
+        "backend_info": backend_info
+    })
+    
+    # Consolidação
+    final_records = []
+    for tid, data in tracks.items():
+        if data["confidences"]:
+            final_color = max(data["color_votes"].items(), key=lambda x: x[1])[0] if data["color_votes"] else "indefinido"
+            final_records.append({
+                "video_id": video_path_obj.stem,
+                "track_id": tid,
+                "frame_inicial": data["start_frame"],
+                "frame_final": data["end_frame"],
+                "cor": final_color,
+                "confianca_media": round(sum(data["confidences"]) / len(data["confidences"]), 4)
+            })
+    
+    # Output
+    color_counts = defaultdict(int)
+    for record in final_records:
+        color_counts[record["cor"]] += 1
+    
+    result_data = {
+        "video_info": {
+            "filename": video_path_obj.name,
+            "resolution": f"{video_info['width']}x{video_info['height']}",
+            "fps_in": round(video_info['fps'], 3),
+            "fps_out": round(writer.output_fps, 3),
+            "total_frames_in": video_info['total_frames'],
+            "total_frames_out": writer.frames_written,
+            "frame_stride": frame_stride,
+            "timeline_mode": timeline_mode
+        },
+        "hardware_info": {
+            "device": device,
+            "backend_detection": backend_info["detection"],
+            "backend_classification": backend_info["classification"],
+            "hardware_detected": hardware_info
+        },
+        "processing_parameters": {
+            "tracker": cfg["tracker"],
+            "detection": {"imgsz": cfg["detection"]["imgsz_cpu"], "conf_threshold": det_conf, "iou_threshold": det_iou, "max_det": max_det},
+            "classification": {"min_confidence": cfg["classification"]["min_confidence"], "imgsz": cfg["classification_model"]["imgsz"], "batch_size": cfg["classification_model"]["batch_size"]},
+            "performance": cfg["performance"],
+        },
+        "performance_metrics": performance_summary,
+        "tracks": final_records,
+        "summary": {"total_tracks": len(final_records), "color_distribution": dict(color_counts)}
+    }
+    
+    # Save
+    output_paths = {}
+    if cfg["output"]["save_json"]:
+        json_path = out_dir_path / f"{video_path_obj.stem}_tracking_{suffix}.json"
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(result_data, f, indent=2, ensure_ascii=False)
+        output_paths["json"] = str(json_path)
+    
+    if cfg["output"]["save_csv"] and final_records:
+        csv_path = out_dir_path / f"{video_path_obj.stem}_tracking_{suffix}.csv"
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer_csv = csv.DictWriter(f, fieldnames=final_records[0].keys())
+            writer_csv.writeheader()
+            writer_csv.writerows(final_records)
+        output_paths["csv"] = str(csv_path)
+    
+    print(f"\n🎉 TRACKING CONFIGURÁVEL concluído:")
+    print(f"   📊 {len(final_records)} tracks detectados!")
+    print(f"   ⚡ Performance: {performance_summary['average_fps']:.1f} FPS")
+    print(f"   🚀 Raw equivalent: {performance_summary['fps_raw_equiv']:.1f} FPS")
+    print(f"   🎯 Backend: {backend_info['detection']} + {backend_info['classification']}")
+    
     return {
-        "json": str(json_path),
-        "csv": str(csv_path),
+        "json": output_paths.get("json", ""),
+        "csv": output_paths.get("csv", ""),
         "video_annotated": str(out_video_path),
-        "total_tracks": len(records),
-        "summary": dict(summary),
+        "output_dir": str(out_dir_path),
+        "total_tracks": len(final_records),
+        "output_files": output_paths,
+        "performance": performance_summary,
+        "color_distribution": dict(color_counts)
     }

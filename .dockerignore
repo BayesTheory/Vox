@@ -1,0 +1,10 @@
+# Ignorar arquivos de ambiente virtual e sistema
+venv/
+*.venv
+.env
+.git
+.vscode/
+
+# Cache do Python e checkpoints do Jupyter
+**/__pycache__
+**/.ipynb_checkpoints/

@@ -61,7 +61,9 @@ def seed_everything(seed: int = 42) -> None:
 
 def load_config(config_path: str) -> Dict[str, Any]:
     """
-    Carrega arquivo de configuração JSON com validação básica.
+    Carrega arquivo de configuração JSON com validação flexível.
+    
+    ATUALIZADO: Suporta estrutura hierárquica (project.model_family).
     """
     config_file = Path(config_path)
     if not config_file.exists():
@@ -71,11 +73,32 @@ def load_config(config_path: str) -> Dict[str, Any]:
         with open(config_file, 'r', encoding='utf-8') as f:
             config = json.load(f)
         
-        # Validação mínima da estrutura
-        required_keys = ['model_family', 'datasets', 'training']
-        missing = [k for k in required_keys if k not in config]
-        if missing:
-            raise ValueError(f"Chaves obrigatórias ausentes no config: {missing}")
+        # Validação flexível: aceita model_family no raiz OU em project.model_family
+        if "model_family" not in config:
+            # Tenta buscar em project.model_family
+            if "project" in config and "model_family" in config["project"]:
+                # Move para o nível raiz para compatibilidade com código legado
+                config["model_family"] = config["project"]["model_family"]
+                logger.info("✅ model_family encontrado em project.model_family")
+            else:
+                logger.warning("⚠️  model_family não encontrado no config, usando 'yolo11' como padrão")
+                config["model_family"] = "yolo11"
+        
+        # Validação de estruturas essenciais (com defaults)
+        if "datasets" not in config:
+            logger.warning("⚠️  Seção 'datasets' ausente no config, criando vazia")
+            config["datasets"] = {}
+        
+        if "training" not in config:
+            logger.warning("⚠️  Seção 'training' ausente no config, usando defaults")
+            config["training"] = {"seed": 42}
+        
+        if "mlflow" not in config:
+            logger.warning("⚠️  Seção 'mlflow' ausente no config, usando defaults")
+            config["mlflow"] = {
+                "tracking_uri": "./mlruns",
+                "experiment_name": "YOLO_Training"
+            }
         
         logger.info(f"✅ Config carregado: {config_path}")
         return config
@@ -213,7 +236,6 @@ def create_balanced_dataset(
     
     # Calcula targets
     max_count = max(class_counts.values())
-    min_count = min(class_counts.values())
     target_count = max(1, int(max_count * ratio))
     
     logger.info(f"📊 Distribuição original: {dict(class_counts)}")
