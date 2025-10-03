@@ -1,7 +1,0 @@
-video_id,track_id,frame_inicial,frame_final,cor,confianca_media
-b,72,662,836,preto,0.9999
-b,74,808,908,verde,0.7247
-b,146,1370,1518,marrom,0.5703
-b,160,1458,1540,branco,0.6858
-b,168,1530,1534,branco,0.8846
-b,170,1542,1546,branco,0.5884
