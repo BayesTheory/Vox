@@ -40,7 +40,6 @@ Sistema avançado de **detecção e rastreamento de veículos** com **classifica
 Vox/
 ├── 📋 requirements.txt              # Dependências Python
 ├── 📊 config.json                   # Configurações principais
-├── 🚀 scripts/deploy.sh             # Deploy automatizado
 ├── 📁 src/
 │   ├── ⚙️ main_uni.py               # Código fonte
 │   ├── 🌐 api/main_api.py          # API FastAPI multi-car
